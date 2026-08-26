@@ -1,0 +1,65 @@
+name: genuc_mobile
+description: "GENUC Mobile Application"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.10.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # Sélecteurs de date/heure en français : sans ce paquet, `showDatePicker`
+  # avec `locale: fr` lève une assertion au lieu de s'ouvrir.
+  flutter_localizations:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  dio: ^5.4.0
+  dio_cookie_manager: ^3.1.0
+  cookie_jar: ^4.0.0
+  flutter_secure_storage: ^9.0.0
+  path_provider: ^2.1.4
+  provider: ^6.1.0
+  flutter_spinkit: ^5.2.0
+  flutter_svg: ^2.0.10
+  google_fonts: ^6.2.1
+  shared_preferences: ^2.3.2
+  fl_chart: ^0.66.0
+  image_picker: ^1.0.4
+  geolocator: ^14.0.2
+  mobile_scanner: ^7.4.0
+  intl: 0.20.2
+  file_picker: ^11.0.3
+  open_filex: ^4.7.0
+  url_launcher: ^6.3.2
+  share_plus: ^12.0.2
+  qr_flutter: ^4.1.0
+  # M1 : Firebase Cloud Messaging pour notifications push
+  firebase_core: ^3.8.1
+  firebase_messaging: ^15.2.1
+  # M6 : Shorebird pour mises à jour OTA (code push)
+  shorebird_code_push: ^2.0.7
+  # Notifications locales pour FCM
+  flutter_local_notifications: ^18.0.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/background/bg-universites-clair.svg
+    - assets/background/bg-universites-dark.svg
+    - assets/images/logo-genuc.png
+    - assets/images/logo-tachpay.png
+    - assets/images/university/HECEME.png
+    - assets/images/university/dash.jpg
+    - assets/images/university/upn-rectorat.jpg
+    - assets/images/university/upn.jpg
+    - assets/images/university/unikinv.jpg
+    - assets/images/university/hecarbre.jpg
+    - assets/images/university/heccour.jpg
+    - assets/images/university/UNILUpaysage.jpg

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Écran affiché par Android avant que Flutter ne dessine sa première frame.
+     Il reprend le fond bleu nuit et le logo GENUC de l'écran de démarrage
+     Flutter, pour que le lancement ne montre aucun flash blanc. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/genuc_primary" />
+
+    <item>
+        <bitmap
+            android:gravity="center"
+            android:src="@drawable/splash_logo" />
+    </item>
+</layer-list>

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Variante API 21+ : identique à drawable/launch_background.xml. Sans cette
+     copie, Android reprendrait le fond système et le logo disparaîtrait. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/genuc_primary" />
+
+    <item>
+        <bitmap
+            android:gravity="center"
+            android:src="@drawable/splash_logo" />
+    </item>
+</layer-list>

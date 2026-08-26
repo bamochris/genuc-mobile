@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Bleu nuit de marque GENUC, identique à la variable color-primary
+         du portail web. -->
+    <color name="genuc_primary">#0B1F4A</color>
+</resources>

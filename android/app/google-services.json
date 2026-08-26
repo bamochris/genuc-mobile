@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "772258150777",
+    "project_id": "genuc-mobile-rdc",
+    "storage_bucket": "genuc-mobile-rdc.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:772258150777:android:e9b7cb4fe551c80a4757a8",
+        "android_client_info": {
+          "package_name": "com.genuc.genuc_mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAdFo7DlkT89qFpvUCh84u6Lyd7DazsZNo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

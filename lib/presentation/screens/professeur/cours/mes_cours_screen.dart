@@ -1,0 +1,551 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../../../../core/errors/api_exception.dart';
+import '../../../../core/theme/app_theme.dart';
+import '../../../../core/utils/responsive.dart';
+import '../../../../data/services/appel_api.dart';
+import '../../../../data/services/commun_service.dart';
+import '../../../../data/services/professeur_pedagogie_service.dart';
+import '../../../providers/auth_provider.dart';
+import '../../../widgets/portail_widgets.dart';
+import '../lms/lms_screens.dart';
+import 'etudiants_cours_screen.dart';
+import 'supports_screen.dart';
+
+/// Statuts de cours et leurs couleurs, repris de `STATUT_STYLES`
+/// (`pages/professeur/cours/MesCours.jsx`).
+const Map<String, (String, Color, IconData)> statutsCours = {
+  'PUBLIE': ('Publié', AppTheme.statutVert, Icons.check_circle_rounded),
+  'EN_COURS': ('En cours', AppTheme.statutBleu, Icons.hourglass_bottom_rounded),
+  'PLANIFIE': ('Planifié', AppTheme.statutOrange, Icons.schedule_rounded),
+  'TERMINE': ('Terminé', AppTheme.statutNavy, Icons.check_circle_rounded),
+  'BROUILLON': ('Brouillon', AppTheme.statutNavy, Icons.edit_rounded),
+};
+
+/// Couleur par niveau (`NIVEAU_COLORS` côté web).
+Color couleurNiveau(String niveau) => switch (niveau) {
+      'L1' => AppTheme.statutBleu,
+      'L2' => AppTheme.statutVert,
+      'L3' => AppTheme.statutOrange,
+      'M1' => AppTheme.statutViolet,
+      'M2' => AppTheme.statutRouge,
+      _ => AppTheme.statutNavy,
+    };
+
+/// Liste des cours attribués à l'enseignant.
+///
+/// Comme sur le web, aucune donnée de démonstration n'est affichée en cas
+/// d'échec : un enseignant qui voit des cours inventés croit son affectation
+/// faite, et peut y saisir des présences et des notes qui ne se rattachent à
+/// rien.
+class MesCoursProfesseurScreen extends StatefulWidget {
+  const MesCoursProfesseurScreen({super.key});
+
+  @override
+  State<MesCoursProfesseurScreen> createState() =>
+      _MesCoursProfesseurScreenState();
+}
+
+class _MesCoursProfesseurScreenState extends State<MesCoursProfesseurScreen> {
+  List<Fiche> _cours = const [];
+  List<Fiche> _coursVacation = const [];
+  Map<String, String> _typeParVacation = const {};
+
+  bool _chargement = true;
+  String? _erreur;
+  String _recherche = '';
+  String? _filtreStatut;
+  String? _filtreNiveau;
+  String? _filtreVacation;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _charger());
+  }
+
+  Future<void> _charger() async {
+    final auth = context.read<AuthProvider>();
+    final service = context.read<ProfesseurPedagogieService>();
+    final commun = context.read<CommunService>();
+    final professeurId = auth.user?.id ?? '';
+    final universiteId = auth.user?.universiteId;
+
+    setState(() {
+      _chargement = true;
+      _erreur = null;
+    });
+
+    try {
+      final cours = await service.mesCours(professeurId);
+      if (!mounted) return;
+      setState(() {
+        _cours = cours;
+        _chargement = false;
+      });
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _cours = const [];
+        _erreur = e.message;
+        _chargement = false;
+      });
+    }
+
+    // Vacations : accessoire. Leur échec ne doit pas vider la liste des cours,
+    // qui est l'information principale de l'écran.
+    try {
+      final parVacation = await service.coursParVacation(professeurId);
+      final vacations = universiteId == null
+          ? <Fiche>[]
+          : await commun.vacationsActives(universiteId);
+      if (!mounted) return;
+      setState(() {
+        _coursVacation = parVacation;
+        _typeParVacation = {
+          for (final v in vacations) v.id: v.texte('type'),
+        };
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _coursVacation = const []);
+    }
+  }
+
+  List<Fiche> get _filtres {
+    return _cours.where((c) {
+      final terme = _recherche.toLowerCase();
+      final correspond = terme.isEmpty ||
+          c.texte('titre').toLowerCase().contains(terme) ||
+          c.texte('code').toLowerCase().contains(terme);
+      final statut = _filtreStatut == null || c.texte('statut') == _filtreStatut;
+      final niveau = _filtreNiveau == null || c.texte('niveau') == _filtreNiveau;
+      return correspond && statut && niveau;
+    }).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final niveaux = _cours
+        .map((c) => c.texte('niveau'))
+        .where((n) => n.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+    final statuts = _cours
+        .map((c) => c.texte('statut'))
+        .where((s) => s.isNotEmpty)
+        .toSet()
+        .toList();
+
+    final totalEtudiants =
+        _cours.fold<int>(0, (s, c) => s + c.entier('nbEtudiants'));
+    final publies =
+        _cours.where((c) => c.texte('statut') == 'PUBLIE').length;
+    final credits = _cours.fold<int>(0, (s, c) => s + c.entier('credits'));
+
+    return PagePortail(
+      titre: 'Mes cours',
+      sousTitre: '${_cours.length} cours attribué${_cours.length > 1 ? 's' : ''}',
+      onRafraichir: _charger,
+      corps: EtatRequete(
+        chargement: _chargement,
+        erreur: _erreur,
+        vide: _cours.isEmpty,
+        onReessayer: _charger,
+        iconeVide: Icons.menu_book_rounded,
+        messageVide: 'Aucun cours ne vous est attribué pour le moment.',
+        enfant: ListView(
+          padding: Responsive.margePage(context),
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: [
+            RangeeKpi(
+              tuiles: [
+                TuileKpi(
+                  icone: Icons.menu_book_rounded,
+                  valeur: '${_cours.length}',
+                  libelle: 'Total cours',
+                  couleur: AppTheme.statutBleu,
+                ),
+                TuileKpi(
+                  icone: Icons.check_circle_rounded,
+                  valeur: '$publies',
+                  libelle: 'Cours publiés',
+                  couleur: AppTheme.statutVert,
+                ),
+                TuileKpi(
+                  icone: Icons.groups_rounded,
+                  valeur: '$totalEtudiants',
+                  libelle: 'Total étudiants',
+                  couleur: AppTheme.statutOrange,
+                ),
+                TuileKpi(
+                  icone: Icons.workspace_premium_rounded,
+                  valeur: '$credits',
+                  libelle: 'Total crédits',
+                  couleur: AppTheme.statutViolet,
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            BarreFiltres(
+              indice: 'Titre, code du cours…',
+              onRecherche: (v) => setState(() => _recherche = v),
+              filtres: [
+                FiltreDeroulant<String>(
+                  libelle: 'Statut',
+                  valeur: _filtreStatut,
+                  options: [
+                    const DropdownMenuItem(value: null, child: Text('Tous')),
+                    for (final s in statuts)
+                      DropdownMenuItem(
+                        value: s,
+                        child: Text(statutsCours[s]?.$1 ?? s),
+                      ),
+                  ],
+                  onChange: (v) => setState(() => _filtreStatut = v),
+                ),
+                FiltreDeroulant<String>(
+                  libelle: 'Niveau',
+                  valeur: _filtreNiveau,
+                  options: [
+                    const DropdownMenuItem(value: null, child: Text('Tous')),
+                    for (final n in niveaux)
+                      DropdownMenuItem(value: n, child: Text(n)),
+                  ],
+                  onChange: (v) => setState(() => _filtreNiveau = v),
+                ),
+              ],
+            ),
+            if (_coursVacation.isNotEmpty) ...[
+              _SectionVacations(
+                coursVacation: _coursVacation,
+                typeParVacation: _typeParVacation,
+                filtre: _filtreVacation,
+                onFiltre: (v) => setState(() => _filtreVacation = v),
+              ),
+              const SizedBox(height: 20),
+            ],
+            if (_filtres.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 40),
+                child: Text(
+                  'Aucun cours ne correspond à vos filtres.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: AppTheme.textMutedOf(context)),
+                ),
+              )
+            else
+              for (final cours in _filtres) ...[
+                _CarteCours(cours: cours),
+                const SizedBox(height: 12),
+              ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CarteCours extends StatelessWidget {
+  final Fiche cours;
+
+  const _CarteCours({required this.cours});
+
+  @override
+  Widget build(BuildContext context) {
+    final niveau = cours.texte('niveau');
+    final statut = statutsCours[cours.texte('statut')] ??
+        statutsCours['BROUILLON']!;
+    final teinteNiveau = couleurNiveau(niveau);
+
+    return CartePortail(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    if (niveau.isNotEmpty)
+                      Pastille(texte: niveau, couleur: teinteNiveau),
+                    if (cours.texte('code').isNotEmpty)
+                      Pastille(
+                        texte: cours.texte('code'),
+                        couleur: AppTheme.statutNavy,
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Pastille(
+                texte: statut.$1,
+                couleur: statut.$2,
+                icone: statut.$3,
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            cours.texte('titre', defaut: 'Cours sans titre'),
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+          if (cours.texte('description').isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              cours.texte('description'),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 13,
+                color: AppTheme.textSecondaryOf(context),
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 16,
+            runSpacing: 6,
+            children: [
+              _Meta(
+                icone: Icons.groups_rounded,
+                texte: '${cours.entier('nbEtudiants')} étudiants',
+                couleur: teinteNiveau,
+              ),
+              _Meta(
+                icone: Icons.workspace_premium_rounded,
+                texte: '${cours.entier('credits')} crédit'
+                    '${cours.entier('credits') > 1 ? 's' : ''}',
+                couleur: teinteNiveau,
+              ),
+              _Meta(
+                icone: Icons.schedule_rounded,
+                texte: '${cours.entier('heures')} h',
+                couleur: teinteNiveau,
+              ),
+              _Meta(
+                icone: Icons.menu_book_rounded,
+                texte: cours.texte('promotion', alias: const ['annee'],
+                    defaut: '—'),
+                couleur: teinteNiveau,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Divider(color: AppTheme.borderOf(context), height: 1),
+          const SizedBox(height: 6),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                TextButton.icon(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => EtudiantsCoursScreen(
+                        coursId: cours.id,
+                        titreCours: cours.texte('titre'),
+                      ),
+                    ),
+                  ),
+                  icon: const Icon(Icons.groups_rounded, size: 16),
+                  label: const Text('Étudiants'),
+                ),
+                TextButton.icon(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => SupportsCoursScreen(
+                        coursIdInitial: cours.id,
+                      ),
+                    ),
+                  ),
+                  icon: const Icon(Icons.folder_rounded, size: 16),
+                  label: const Text('Supports'),
+                ),
+                // Le contenu en ligne et son suivi appartiennent au cours :
+                // le web les monte aussi sous `cours/:id/…`, pas au menu.
+                TextButton.icon(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => ContenuCoursScreen(
+                        coursId: cours.id,
+                        coursTitre: cours.texte('titre'),
+                      ),
+                    ),
+                  ),
+                  icon: const Icon(Icons.auto_stories_rounded, size: 16),
+                  label: const Text('Contenu'),
+                ),
+                TextButton.icon(
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => StatistiquesApprentissageScreen(
+                        coursId: cours.id,
+                        coursTitre: cours.texte('titre'),
+                      ),
+                    ),
+                  ),
+                  icon: const Icon(Icons.insights_rounded, size: 16),
+                  label: const Text('Suivi'),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Meta extends StatelessWidget {
+  final IconData icone;
+  final String texte;
+  final Color couleur;
+
+  const _Meta({
+    required this.icone,
+    required this.texte,
+    required this.couleur,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icone, size: 13, color: AppTheme.accentLisible(context, couleur)),
+        const SizedBox(width: 5),
+        Text(
+          texte,
+          style: TextStyle(
+            fontSize: 12,
+            color: AppTheme.textMutedOf(context),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Cours de l'enseignant vus par vacation (jour / soir).
+///
+/// Une même promotion peut suivre le même cours en journée et en soirée : ce
+/// bloc dit lequel des deux, ce que la liste principale ne distingue pas.
+class _SectionVacations extends StatelessWidget {
+  final List<Fiche> coursVacation;
+  final Map<String, String> typeParVacation;
+  final String? filtre;
+  final ValueChanged<String?> onFiltre;
+
+  const _SectionVacations({
+    required this.coursVacation,
+    required this.typeParVacation,
+    required this.filtre,
+    required this.onFiltre,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final visibles = filtre == null
+        ? coursVacation
+        : coursVacation
+            .where((cv) => typeParVacation[cv.texte('vacationId')] == filtre)
+            .toList();
+
+    return CartePortail(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          EnteteSection(
+            titre: 'Mes cours par vacation',
+            icone: Icons.brightness_4_rounded,
+            action: FiltreDeroulant<String>(
+              libelle: 'Vacation',
+              valeur: filtre,
+              options: const [
+                DropdownMenuItem(value: null, child: Text('Toutes')),
+                DropdownMenuItem(value: 'JOUR', child: Text('Jour')),
+                DropdownMenuItem(value: 'SOIR', child: Text('Soir')),
+              ],
+              onChange: onFiltre,
+            ),
+          ),
+          if (visibles.isEmpty)
+            Text(
+              'Aucun cours pour ce filtre de vacation.',
+              style: TextStyle(
+                fontSize: 13,
+                color: AppTheme.textMutedOf(context),
+              ),
+            )
+          else
+            for (final cv in visibles)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            cv.texte('coursTitre'),
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        if (typeParVacation[cv.texte('vacationId')] != null)
+                          Pastille(
+                            texte:
+                                typeParVacation[cv.texte('vacationId')] == 'JOUR'
+                                    ? 'Jour'
+                                    : 'Soir',
+                            couleur:
+                                typeParVacation[cv.texte('vacationId')] == 'JOUR'
+                                    ? AppTheme.statutVert
+                                    : AppTheme.statutViolet,
+                          ),
+                      ],
+                    ),
+                    Text(
+                      [
+                        cv.texte('vacationNom'),
+                        '${_libelleJour(cv.texte('jour'))} ${cv.texte('heureDebut')}'
+                            '–${cv.texte('heureFin')}',
+                        if (cv.texte('salle').isNotEmpty) cv.texte('salle'),
+                        cv.texte('promotionNom', defaut: '—'),
+                      ].where((t) => t.trim().isNotEmpty).join(' · '),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppTheme.textMutedOf(context),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+        ],
+      ),
+    );
+  }
+}
+
+const Map<String, String> _joursFr = {
+  'MONDAY': 'Lundi',
+  'TUESDAY': 'Mardi',
+  'WEDNESDAY': 'Mercredi',
+  'THURSDAY': 'Jeudi',
+  'FRIDAY': 'Vendredi',
+  'SATURDAY': 'Samedi',
+  'SUNDAY': 'Dimanche',
+};
+
+String _libelleJour(String code) => _joursFr[code.toUpperCase()] ?? code;

@@ -1,0 +1,217 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0a1216"/>
+      <stop offset="0.5" stop-color="#0c161c"/>
+      <stop offset="1" stop-color="#0a1014"/>
+    </linearGradient>
+    <radialGradient id="vignette" cx="0.5" cy="0.42" r="0.95">
+      <stop offset="0" stop-color="#132530" stop-opacity="0.5"/>
+      <stop offset="0.55" stop-color="#0c161c" stop-opacity="0"/>
+      <stop offset="1" stop-color="#05090c" stop-opacity="0.7"/>
+    </radialGradient>
+
+    <!-- ================= ICONES ================= -->
+
+    <!-- GENUC : mortier en losange, cercles aux sommets, virgule interieure, double chevron -->
+    <g id="genuc" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M42.5 17.5 L8 39 L50 65 L91.5 39.5 L57.5 17.5"/>
+      <circle cx="50" cy="11" r="8.5"/>
+      <circle cx="6.5" cy="40" r="4.2"/>
+      <circle cx="93.5" cy="40.5" r="4.2"/>
+      <circle cx="50" cy="66" r="5.2"/>
+      <path d="M62 22 Q52 32 60 41 Q67 48 80 52 Q70 44 66 37 Q61 29 64 23"/>
+      <path d="M22 60 V76 q0 5.5 5.5 8.5 L47 95 q3 1.6 6 0 L75 83 q5.5 -3 6.5 -8.5"/>
+      <path d="M28 84 l19 10.5 q3 1.6 6 0 L75 83 q5.5 -3 6.5 -8.5" transform="translate(0,14)"/>
+    </g>
+
+    <!-- GENUC : chevron seul (marque du logotype) -->
+    <g id="genucmark" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 34 V18 L50 37 L88 19"/>
+      <path d="M12 34 L50 53 L88 35"/>
+      <path d="M88 19 q3 6 0 16"/>
+    </g>
+
+    <!-- Mortier + gland + swoosh (TachFee) -->
+    <g id="gradcap" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M50 14 L94 40 L50 66 L6 40 Z"/>
+      <path d="M30 54 v15 q0 9 20 13 q20 -4 20 -13 v-15"/>
+      <path d="M50 40 L15 41 v20 m0 0 q-2.5 5 0 9 q3 1.5 5 0"/>
+      <path d="M22 96 Q52 109 84 90 M73 88.5 l11 1 l-4.5 9.5"/>
+    </g>
+
+    <!-- Blason : 3 etoiles + fleche + livre ouvert (UNIKIN / ISP / UPN) -->
+    <g id="shield" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M16 10 H84 V66 Q84 102 50 114 Q16 102 16 66 Z"/>
+      <path d="M50 96 V38 M42.5 49 L50 35 L57.5 49"/>
+      <path d="M50 15 l2.6 5.4 l6 0.8 l-4.4 4.2 l1.1 6 l-5.3 -2.9 l-5.3 2.9 l1.1 -6 l-4.4 -4.2 l6 -0.8 Z"/>
+      <path d="M33 29 l2 4.2 l4.6 0.6 l-3.4 3.3 l0.9 4.6 l-4.1 -2.2 l-4.1 2.2 l0.9 -4.6 l-3.4 -3.3 l4.6 -0.6 Z"/>
+      <path d="M67 29 l2 4.2 l4.6 0.6 l-3.4 3.3 l0.9 4.6 l-4.1 -2.2 l-4.1 2.2 l0.9 -4.6 l-3.4 -3.3 l4.6 -0.6 Z"/>
+      <path d="M27 70 Q38.5 62.5 50 70 Q61.5 62.5 73 70 M27 70 v3 Q38.5 66 50 73.5 Q61.5 66 73 73 v-3"/>
+    </g>
+
+    <!-- Palmier + soleil levant (UNIKIS / UPN) -->
+    <g id="palm" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M55 96 Q52 64 61 36 M61 96 Q57 66 65 38"/>
+      <path d="M63 36 Q46 27 31 34 M63 36 Q54 19 37 16 M63 36 Q66 17 82 12 M63 36 Q80 25 93 33 M63 36 Q79 40 87 52"/>
+      <circle cx="28" cy="76" r="9.5"/>
+      <path d="M28 61 v-5.5 M13 76 h-5.5 M17 65 l-4 -4 M39 65 l4 -4 M15.5 88.5 l-4 4"/>
+      <path d="M8 96 Q30 90 55 96 Q80 102 93 95"/>
+    </g>
+
+    <!-- Lampe a huile + flamme (UCC) -->
+    <g id="lamp" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M18 38 q-4 17 26 19 q24 -1.5 27 -13 L60 37 q-5 5.5 -13 3.5"/>
+      <path d="M18 38 q14 -7 29 -2"/>
+      <path d="M23 30 q-3 -10 5 -15 q-3.5 8.5 2.5 12.5"/>
+      <path d="M14 65 q30 8 58 0 M28 71.5 q17 4 32 0"/>
+    </g>
+
+    <!-- Branche de laurier (U.R. KIM / HEC-KIN) -->
+    <g id="laurel" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M30 96 Q10 60 28 16"/>
+      <path d="M26 82 q-13 -2 -17 -14 q13 0 17 14 Z M22 62 q-13 -4 -15 -16 q13 2 15 16 Z M22 42 q-11 -6 -11 -18 q11 4 11 18 Z M25 26 q-7.5 -8 -5.5 -17.5 q9.5 6 5.5 17.5 Z"/>
+      <path d="M30 88 q13.5 0 19.5 -10 q-13.5 -2 -19.5 10 Z M26 68 q13.5 -2 17.5 -14 q-13.5 0 -17.5 14 Z M25 48 q12.5 -4 14.5 -15.5 q-12.5 2 -14.5 15.5 Z"/>
+    </g>
+
+    <!-- Engrenage (HEC-KIN / UPN) -->
+    <g id="gear" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="50" cy="50" r="19"/>
+      <circle cx="50" cy="50" r="7.5"/>
+      <path d="M50 31 v-9 M50 69 v9 M31 50 h-9 M69 50 h9 M36.5 36.5 l-6.4 -6.4 M63.5 63.5 l6.4 6.4 M63.5 36.5 l6.4 -6.4 M36.5 63.5 l-6.4 6.4"/>
+    </g>
+
+    <!-- Livre ouvert -->
+    <g id="book" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M10 22 Q30 10.5 50 22 Q70 10.5 90 22 V57 Q70 46.5 50 57 Q30 46.5 10 57 Z"/>
+      <path d="M50 22 V57"/>
+      <path d="M19 28.5 Q33 21 44 26.5 M19 37.5 Q33 30 44 35.5 M19 46.5 Q33 39 44 44.5 M56 26.5 Q67 21 81 28.5 M56 35.5 Q67 30 81 37.5 M56 44.5 Q67 39 81 46.5"/>
+    </g>
+
+    <!-- Corne / defense d'ivoire (UNISIC) -->
+    <g id="horn" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M24 92 Q8 48 44 14 Q41 30 37 44 Q31 68 35 90 Z"/>
+      <path d="M29 76 q7 2 5.5 10"/>
+    </g>
+
+    <!-- Vagues (UNILU / UPN / UNIGOM) -->
+    <g id="waves" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M8 15 q11 -11 22 0 t22 0 t22 0"/>
+      <path d="M8 34 q11 -11 22 0 t22 0 t22 0"/>
+      <path d="M8 53 q11 -11 22 0 t22 0 t22 0"/>
+    </g>
+
+    <!-- Eventail de rayons (UPC) -->
+    <g id="sunburst" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M14 86 L86 78 M14 86 L84 58 M14 86 L76 40 M14 86 L62 26 M14 86 L44 16 M14 86 L26 12"/>
+      <circle cx="14" cy="86" r="3.6"/>
+    </g>
+
+    <!-- Graphique + fleche de croissance (HEC-KIN) -->
+    <g id="chart" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M14 88 H88"/>
+      <path d="M24 88 V64 h9 V88 M44 88 V50 h9 V88 M64 88 V36 h9 V88"/>
+      <path d="M16 60 Q52 38 78 18 M66.5 15.5 l13.5 -2 l-2 13.5"/>
+    </g>
+
+    <!-- Tour de Limete (HEC-KIN) -->
+    <g id="tower" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M45 96 L49.5 12 L54 96"/>
+      <path d="M46.2 76 h6.8 M46.9 58 h5.6 M47.6 40 h4.2 M48.2 26 h3"/>
+      <path d="M46.5 76 l6 -18 m-6 0 l6 18 M47.2 58 l4.8 -18 m-4.8 0 l4.8 18"/>
+      <path d="M45 96 h-8 M54 96 h8"/>
+      <circle cx="49.5" cy="8" r="2.8"/>
+    </g>
+
+    <!-- Deux cierges (ISIPA) -->
+    <g id="candles" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M30 92 V45 q6 -4 12 0 V92 Z"/>
+      <path d="M58 92 V37 q6 -4 12 0 V92 Z"/>
+      <path d="M36 36 q-3.6 -7.5 0 -11.5 q3.6 5.5 0 11.5 Z M64 28 q-3.6 -7.5 0 -11.5 q3.6 5.5 0 11.5 Z"/>
+      <path d="M24 92 h52"/>
+    </g>
+
+    <!-- Couronne (U.R. KIM) -->
+    <g id="crown" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M16 44 L21 19 L34 33 L50 13 L66 33 L79 19 L84 44 Z"/>
+      <path d="M16 50 h68"/>
+      <circle cx="21" cy="14.5" r="2.8"/><circle cx="50" cy="8.5" r="2.8"/><circle cx="79" cy="14.5" r="2.8"/>
+    </g>
+
+    <!-- Croix rayonnante (U.R. KIM) -->
+    <g id="cross" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M44.5 16 h11 v18 h16 v11 h-16 v35 h-11 V45 h-16 V34 h16 Z"/>
+      <path d="M50 8 v-4 M25 39.5 h-4 M79 39.5 h-4 M33 22 l-3 -3 M67 22 l3 -3"/>
+    </g>
+
+    <!-- Sceau circulaire + losanges (UCC) -->
+    <g id="seal" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="50" cy="50" r="40"/>
+      <circle cx="50" cy="50" r="29"/>
+      <path d="M50 5.5 l4 4.5 l-4 4.5 l-4 -4.5 Z M50 85.5 l4 4.5 l-4 4.5 l-4 -4.5 Z M5.5 50 l4.5 -4 l4.5 4 l-4.5 4 Z M85.5 50 l4.5 -4 l4.5 4 l-4.5 4 Z"/>
+    </g>
+
+    <!-- Petite etoile -->
+    <g id="star" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M50 18 l7.6 17 l18.4 2 l-13.8 12.2 l4 18.3 l-16.2 -9.8 l-16.2 9.8 l4 -18.3 L28 37 l18.4 -2 Z"/>
+    </g>
+
+    <!-- Plume -->
+    <g id="pen" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M22 88 Q20 50 70 16 Q78 40 46 74 Q36 84 22 88 Z"/>
+      <path d="M30 80 Q48 56 64 34 M40 68 q8 1 13 -4 M34 60 q7 0.5 11 -3.5"/>
+    </g>
+
+    <!-- Toque de face -->
+    <g id="cap2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M10 44 L50 24 L90 44 L50 64 Z"/>
+      <path d="M50 24 v-7"/>
+      <circle cx="50" cy="14" r="3.6"/>
+    </g>
+
+    <!-- Montagne + soleil (UNIGOM) -->
+    <g id="mountain" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M8 72 L34 34 L48 54 L62 26 L92 72 Z"/>
+      <path d="M30 40 l4 5 l4 -5"/>
+      <circle cx="78" cy="18" r="7.5"/>
+      <path d="M78 7 v-4 M89 18 h4 M86 10 l3 -3 M70 10 l-3 -3"/>
+    </g>
+
+    <!-- ================= TUILE ================= -->
+    <pattern id="doodles" width="760" height="760" patternUnits="userSpaceOnUse">
+      <g fill="none" stroke="#9db7c2" stroke-width="2.4" stroke-opacity="0.15">
+        <use href="#gradcap"  transform="translate(40,30)   scale(1.05) rotate(-8 50 50)"/>
+        <use href="#palm"     transform="translate(450,40)  rotate(-5 50 50)"/>
+        <use href="#laurel"   transform="translate(20,240)  rotate(10 30 50)"/>
+        <use href="#book"     transform="translate(170,220) rotate(-7 50 40)"/>
+        <use href="#gear"     transform="translate(360,200) scale(0.9)  rotate(14 50 50)"/>
+        <use href="#tower"    transform="translate(530,190) rotate(4 50 50)"/>
+        <use href="#seal"     transform="translate(640,230) scale(0.85) rotate(-10 50 50)"/>
+        <use href="#horn"     transform="translate(80,410)  rotate(-12 30 50)"/>
+        <use href="#genuc"    transform="translate(220,395) scale(1.05) rotate(6 50 55)"/>
+        <use href="#waves"    transform="translate(430,420) rotate(-4 40 30)"/>
+        <use href="#candles"  transform="translate(30,560)  scale(0.95) rotate(5 50 60)"/>
+        <use href="#chart"    transform="translate(200,590) rotate(-6 50 50)"/>
+        <use href="#cross"    transform="translate(400,580) scale(0.9)  rotate(9 50 50)"/>
+        <use href="#pen"      transform="translate(690,430) scale(0.9)  rotate(12 50 50)"/>
+        <use href="#mountain" transform="translate(690,600) scale(0.85) rotate(-5 50 50)"/>
+        <use href="#cap2"     transform="translate(140,120) scale(0.7)  rotate(10 50 40)"/>
+        <use href="#genucmark" transform="translate(320,320) scale(0.7) rotate(-8 50 35)"/>
+        <use href="#star"     transform="translate(560,110) scale(0.45) rotate(15 50 50)"/>
+        <use href="#star"     transform="translate(120,680) scale(0.4)  rotate(25 50 50)"/>
+      </g>
+      <g fill="none" stroke="#c9a45c" stroke-width="2.4" stroke-opacity="0.13">
+        <use href="#shield"   transform="translate(240,10)  scale(0.95) rotate(6 50 60)"/>
+        <use href="#lamp"     transform="translate(640,60)  rotate(8 50 50)"/>
+        <use href="#crown"    transform="translate(590,400) scale(0.9)  rotate(8 50 30)"/>
+        <use href="#sunburst" transform="translate(560,570) rotate(-8 50 50)"/>
+        <use href="#genucmark" transform="translate(660,330) scale(0.55) rotate(10 50 35)"/>
+        <use href="#star"     transform="translate(340,120) scale(0.35) rotate(-20 50 50)"/>
+      </g>
+    </pattern>
+  </defs>
+
+  <rect width="1080" height="1920" fill="url(#bg)"/>
+  <rect width="1080" height="1920" fill="url(#doodles)"/>
+  <rect width="1080" height="1920" fill="url(#vignette)"/>
+</svg>
