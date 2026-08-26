@@ -112,13 +112,18 @@ class _BoutonTachPay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final estSombre = Theme.of(context).brightness == Brightness.dark;
+    final fondCarte = estSombre ? const Color(0xFF1B2534) : Colors.white;
+    final textePrincipal = estSombre ? const Color(0xFFF7F9FC) : const Color(0xFF14213D);
+    final texteSecondaire = estSombre ? const Color(0xFFAFC0D6) : Colors.grey.shade600;
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(14),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: fondCarte,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: AppTheme.primary.withValues(alpha: .25), width: 1.5),
         ),
@@ -131,10 +136,10 @@ class _BoutonTachPay extends StatelessWidget {
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(visible ? 'Payer mes frais maintenant' : 'TachPay',
-                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: textePrincipal)),
               const SizedBox(height: 2),
               Text(visible ? 'Mobile money — simple et sécurisé' : 'Aucun frais à payer',
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                  style: TextStyle(fontSize: 12, color: texteSecondaire)),
             ]),
           ),
           if (visible)

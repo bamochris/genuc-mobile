@@ -1149,3 +1149,146 @@ class _VacationChoiceCardState extends State<VacationChoiceCard> {
     );
   }
 }
+
+/// Carte de l'horaire de la semaine — aperçu des cours de la semaine type.
+class HoraireSemaineCard extends StatelessWidget {
+  final DashboardData dashboardData;
+
+  const HoraireSemaineCard({
+    super.key,
+    required this.dashboardData,
+  });
+
+  static const Map<String, String> _jourTraduction = {
+    'MONDAY': 'Lundi',
+    'TUESDAY': 'Mardi',
+    'WEDNESDAY': 'Mercredi',
+    'THURSDAY': 'Jeudi',
+    'FRIDAY': 'Vendredi',
+    'SATURDAY': 'Samedi',
+    'SUNDAY': 'Dimanche',
+  };
+
+  static const List<String> _jourOrdre = [
+    'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final emploiTemps = dashboardData.emploiTemps;
+    if (emploiTemps == null || emploiTemps.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final parJour = <String, List<EmploiTempsDto>>{};
+    for (final seance in emploiTemps) {
+      final jour = seance.jour.toUpperCase();
+      parJour.putIfAbsent(jour, () => []).add(seance);
+    }
+
+    final jours = parJour.keys.toList()
+      ..sort((a, b) {
+        final ia = _jourOrdre.indexOf(a);
+        final ib = _jourOrdre.indexOf(b);
+        return (ia < 0 ? 99 : ia).compareTo(ib < 0 ? 99 : ib);
+      });
+
+    for (final liste in parJour.values) {
+      liste.sort((a, b) => a.heureDebut.compareTo(b.heureDebut));
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppTheme.borderOf(context)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.calendar_view_week_rounded,
+                  size: 20, color: AppTheme.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Horaire de la semaine',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pushNamed(context, '/etudiant/horaire'),
+                child: const Text('Voir tout'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          for (final jour in jours) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppTheme.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                _jourTraduction[jour] ?? jour,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.primary,
+                ),
+              ),
+            ),
+            const SizedBox(height: 4),
+            for (final seance in parJour[jour]!) ...[
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 3,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: AppTheme.primary.withValues(alpha: 0.5),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            seance.titre,
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${seance.heureDebut} – ${seance.heureFin}  •  ${seance.salle}',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: AppTheme.textSecondaryOf(context),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: 6),
+          ],
+        ],
+      ),
+    );
+  }
+}

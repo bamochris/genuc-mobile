@@ -132,6 +132,10 @@ class _ContenuDashboard extends StatelessWidget {
             CoursDuJourCard(dashboardData: dashboardData),
             const SizedBox(height: 24),
           ],
+          if (dashboardData.emploiTemps != null && dashboardData.emploiTemps!.isNotEmpty) ...[
+            HoraireSemaineCard(dashboardData: dashboardData),
+            const SizedBox(height: 24),
+          ],
           _ActionsRapides(dashboardData: dashboardData),
           const SizedBox(height: 24),
           ProgressionAcademiqueCard(

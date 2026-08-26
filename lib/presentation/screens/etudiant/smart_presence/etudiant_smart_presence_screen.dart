@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../core/theme/app_theme.dart';
@@ -23,6 +24,9 @@ import '../../../widgets/portail_widgets.dart';
 ///  3. la preuve de proximité envoie position et identifiant d'appareil —
 ///     optionnels, jamais bloquants (le serveur les traite comme des indices
 ///     et signale la présence au professeur en cas de doute).
+/// Phases du flux de marquage de présence.
+enum _Phase { initial, verification, proximiteOk, proximiteKo, scanner }
+
 class EtudiantSmartPresenceScreen extends StatefulWidget {
   const EtudiantSmartPresenceScreen({super.key});
 
@@ -41,6 +45,7 @@ class _EtudiantSmartPresenceScreenState
   ScanQrResponseDto? _resultat;
   Timer? _minuteur;
   bool _fige = false;
+  _Phase _phase = _Phase.initial;
 
   @override
   void initState() {
@@ -94,6 +99,7 @@ class _EtudiantSmartPresenceScreenState
 
     setState(() {
       _action = true;
+      _phase = _Phase.verification;
       _erreur = null;
       _resultat = null;
     });
@@ -108,11 +114,16 @@ class _EtudiantSmartPresenceScreenState
 
       if (!mounted) return;
       if (!proof.valide) {
-        setState(() =>
-            _erreur = 'Impossible de démarrer la vérification. Réessayez.');
+        setState(() {
+          _phase = _Phase.proximiteKo;
+          _erreur = 'Proximité rejetée. Vous devez être en salle de cours.';
+        });
         return;
       }
-      setState(() => _proofToken = proof.proofToken);
+      setState(() {
+        _proofToken = proof.proofToken;
+        _phase = _Phase.proximiteOk;
+      });
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -128,6 +139,7 @@ class _EtudiantSmartPresenceScreenState
           } else {
             _erreur = 'Impossible de démarrer la vérification. Réessayez.';
           }
+          _phase = _Phase.proximiteKo;
         });
       }
     } finally {
@@ -187,6 +199,7 @@ class _EtudiantSmartPresenceScreenState
       _erreur = null;
       _proofToken = null;
       _fige = false;
+      _phase = _Phase.initial;
     });
     _chargerSession();
   }
@@ -208,20 +221,50 @@ class _EtudiantSmartPresenceScreenState
                   else if (_session != null) ...[
                     _CarteSession(session: _session!),
                     const SizedBox(height: 20),
-                    if (_proofToken == null)
+                    if (_phase == _Phase.initial)
                       ElevatedButton.icon(
-                        onPressed: _action ? null : _marquerPresence,
-                        icon: _action
-                            ? const SizedBox(
-                                height: 18,
-                                width: 18,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2, color: Colors.white),
-                              )
-                            : const Icon(Icons.qr_code_scanner_rounded),
-                        label: Text(
-                          _action ? 'Vérification…' : 'MARQUER MA PRÉSENCE',
-                          style: const TextStyle(
+                        onPressed: _marquerPresence,
+                        icon: const Icon(Icons.qr_code_scanner_rounded),
+                        label: const Text(
+                          'MARQUER MA PRÉSENCE',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 18),
+                        ),
+                      )
+                    else if (_phase == _Phase.verification)
+                      _CarteVerificationProximite(
+                        titre: 'Vérification de la proximité…',
+                        sousTitre: 'Comparaison de votre position avec la salle de cours…',
+                        icone: Icons.location_searching_rounded,
+                        couleur: Colors.blue,
+                        enCours: true,
+                      )
+                    else if (_phase == _Phase.proximiteOk) ...[
+                      _CarteVerificationProximite(
+                        titre: 'Proximité validée',
+                        sousTitre: 'Vous êtes bien dans la salle. Scannez maintenant le QR.',
+                        icone: Icons.check_circle_rounded,
+                        couleur: Colors.green,
+                        enCours: false,
+                      ),
+                      const SizedBox(height: 16),
+                      _CarteScanner(
+                        onScan: _validerScan,
+                        enCours: _action,
+                      ),
+                    ]
+                    else if (_phase == _Phase.proximiteKo)
+                      ElevatedButton.icon(
+                        onPressed: _marquerPresence,
+                        icon: const Icon(Icons.refresh_rounded),
+                        label: const Text(
+                          'RÉESSAYER LA VÉRIFICATION',
+                          style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w800,
                           ),
@@ -263,6 +306,71 @@ class _Bandeau extends StatelessWidget {
       child: Text(
         message,
         style: TextStyle(color: couleur, fontWeight: FontWeight.w600),
+      ),
+    );
+  }
+}
+
+class _CarteVerificationProximite extends StatelessWidget {
+  final String titre;
+  final String sousTitre;
+  final IconData icone;
+  final Color couleur;
+  final bool enCours;
+
+  const _CarteVerificationProximite({
+    required this.titre,
+    required this.sousTitre,
+    required this.icone,
+    required this.couleur,
+    required this.enCours,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppTheme.borderOf(context)),
+      ),
+      child: Row(
+        children: [
+          if (enCours)
+            SizedBox(
+              width: 48,
+              height: 48,
+              child: CircularProgressIndicator(
+                strokeWidth: 3,
+                color: couleur,
+              ),
+            )
+          else
+            Icon(icone, size: 48, color: couleur),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  titre,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: couleur,
+                      ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  sousTitre,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AppTheme.textSecondaryOf(context),
+                      ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -418,6 +526,7 @@ class _CarteScanner extends StatefulWidget {
 class _CarteScannerState extends State<_CarteScanner> {
   MobileScannerController? _controller;
   bool _derniereDetection = false;
+  String? _erreurCamera;
 
   @override
   void initState() {
@@ -426,15 +535,40 @@ class _CarteScannerState extends State<_CarteScanner> {
   }
 
   Future<void> _demarrerScan() async {
-    final ctrl = MobileScannerController(
-      detectionSpeed: DetectionSpeed.noDuplicates,
-      autoStart: false,
-    );
-    await ctrl.start();
-    if (mounted) {
-      setState(() {
-        _controller = ctrl;
-      });
+    if (!mounted) return;
+    setState(() => _erreurCamera = null);
+
+    final status = await Permission.camera.status;
+    if (status.isDenied || status.isPermanentlyDenied) {
+      final requested = await Permission.camera.request();
+      if (!requested.isGranted) {
+        if (mounted) {
+          setState(() {
+            _erreurCamera = 'Permission caméra refusée. Autorisez l\'accès dans les paramètres.';
+          });
+        }
+        return;
+      }
+    }
+
+    try {
+      final ctrl = MobileScannerController(
+        detectionSpeed: DetectionSpeed.noDuplicates,
+        autoStart: false,
+      );
+      await ctrl.start();
+      if (mounted) {
+        setState(() {
+          _controller = ctrl;
+          _erreurCamera = null;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _erreurCamera = 'Impossible d\'accéder à la caméra. Utilisez la saisie manuelle.';
+        });
+      }
     }
   }
 
@@ -512,30 +646,72 @@ class _CarteScannerState extends State<_CarteScanner> {
             borderRadius: BorderRadius.circular(12),
             child: SizedBox(
               height: 280,
-              child: _controller == null
+              child: _erreurCamera != null
                   ? Container(
                       color: Colors.black,
-                      child: const Center(
-                        child: CircularProgressIndicator(color: Colors.white),
-                      ),
-                    )
-                  : MobileScanner(
-                      controller: _controller!,
-                      onDetect: _onDetect,
-                      errorBuilder: (context, error) => Container(
-                        color: Colors.black,
-                        child: Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Text(
-                              'Caméra indisponible : utilisez la saisie manuelle.',
-                              style: const TextStyle(color: Colors.white),
-                              textAlign: TextAlign.center,
-                            ),
+                      child: Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.videocam_off_rounded,
+                                  color: Colors.white54, size: 48),
+                              const SizedBox(height: 12),
+                              Text(
+                                _erreurCamera!,
+                                style: const TextStyle(color: Colors.white),
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 16),
+                              ElevatedButton.icon(
+                                onPressed: _demarrerScan,
+                                icon: const Icon(Icons.refresh_rounded),
+                                label: const Text('Réessayer'),
+                              ),
+                            ],
                           ),
                         ),
                       ),
-                    ),
+                    )
+                  : _controller == null
+                      ? Container(
+                          color: Colors.black,
+                          child: const Center(
+                            child: CircularProgressIndicator(color: Colors.white),
+                          ),
+                        )
+                      : MobileScanner(
+                          controller: _controller!,
+                          onDetect: _onDetect,
+                          errorBuilder: (context, error) => Container(
+                            color: Colors.black,
+                            child: Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.videocam_off_rounded,
+                                        color: Colors.white54, size: 48),
+                                    const SizedBox(height: 12),
+                                    const Text(
+                                      'Caméra indisponible : utilisez la saisie manuelle.',
+                                      style: TextStyle(color: Colors.white),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                    const SizedBox(height: 16),
+                                    ElevatedButton.icon(
+                                      onPressed: _demarrerScan,
+                                      icon: const Icon(Icons.refresh_rounded),
+                                      label: const Text('Réessayer'),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
             ),
           ),
           if (widget.enCours) ...[
