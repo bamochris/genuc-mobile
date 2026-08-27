@@ -255,6 +255,15 @@ class EtudiantAcademiqueService extends ServiceApi {
   Future<void> supprimerDocument(String id) =>
       supprimer(ApiEndpoints.document(id));
 
+  /// Supports deposes par l'enseignant sur un cours.
+  ///
+  /// Ouvert a tout compte de l'etablissement : c'est le meme endpoint que le
+  /// portail professeur, en lecture.
+  Future<List<Fiche>> supportsDuCours(String coursId) => listeDe(
+        ApiEndpoints.coursSupports(coursId),
+        contexte: 'Les supports de ce cours n\'ont pas pu être chargés.',
+      );
+
   Future<Fiche> carteEtudiant(String inscriptionId) => ficheDe(
         ApiEndpoints.carteEtudiantDonnees(inscriptionId),
         contexte: 'Votre carte étudiant n\'a pas pu être chargée.',

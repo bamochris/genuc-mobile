@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/utils/fichiers.dart';
+import '../../../../data/services/appel_api.dart';
+import '../../../../data/services/etudiant_academique_service.dart';
 import '../../../../data/models/etudiant/cours.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/student_provider.dart';
@@ -24,6 +27,14 @@ class CoursDetailScreen extends StatefulWidget {
 }
 
 class _CoursDetailScreenState extends State<CoursDetailScreen> {
+  /// Supports déposés par l'enseignant.
+  ///
+  /// Ils étaient publiés depuis le portail professeur et n'avaient AUCUN
+  /// écran côté étudiant — ni web ni mobile : personne ne pouvait les lire.
+  /// `GET /api/cours/{id}/supports` est pourtant ouvert à tout compte de
+  /// l'établissement.
+  List<Fiche> _supports = const [];
+
   @override
   void initState() {
     super.initState();
@@ -33,8 +44,21 @@ class _CoursDetailScreenState extends State<CoursDetailScreen> {
   Future<void> _charger() async {
     final studentProvider = context.read<StudentProvider>();
     final inscriptionId = context.read<AuthProvider>().user?.inscriptionId;
+    // Le service est saisi AVANT le premier `await` : passé celui-ci, le
+    // widget peut avoir quitté l'arbre et le contexte n'est plus lisible.
+    final academique = context.read<EtudiantAcademiqueService>();
+
     if (inscriptionId != null && inscriptionId.isNotEmpty) {
       await studentProvider.loadCoursDetail(inscriptionId, widget.coursId);
+    }
+
+    // Échec silencieux : un cours sans support est le cas ordinaire, et une
+    // erreur ici ne doit pas emporter la page du cours.
+    try {
+      final supports = await academique.supportsDuCours(widget.coursId);
+      if (mounted) setState(() => _supports = supports);
+    } catch (_) {
+      if (mounted) setState(() => _supports = const []);
     }
   }
 
@@ -93,6 +117,7 @@ class _CoursDetailScreenState extends State<CoursDetailScreen> {
                   ? _Contenu(
                       detail: studentProvider.coursDetail!,
                       onMarquerComplete: _marquerComplete,
+                      supports: _supports,
                     )
                   : const EtatVide(
                       icon: Icons.menu_book_rounded,
@@ -105,10 +130,12 @@ class _CoursDetailScreenState extends State<CoursDetailScreen> {
 class _Contenu extends StatelessWidget {
   final CoursDetail detail;
   final void Function(Lecon) onMarquerComplete;
+  final List<Fiche> supports;
 
   const _Contenu({
     required this.detail,
     required this.onMarquerComplete,
+    this.supports = const [],
   });
 
   @override
@@ -122,6 +149,17 @@ class _Contenu extends StatelessWidget {
         children: [
           _EnTeteCours(detail: detail),
           const SizedBox(height: 16),
+          if (supports.isNotEmpty) ...[
+            SectionCard(
+              title: 'Supports de cours (${supports.length})',
+              icon: Icons.attach_file_rounded,
+              children: [
+                for (final support in supports)
+                  _LigneSupport(support: support),
+              ],
+            ),
+            const SizedBox(height: 16),
+          ],
           if (cours.description != null && cours.description!.isNotEmpty) ...[
             SectionCard(
               title: 'Description',
@@ -157,6 +195,58 @@ class _Contenu extends StatelessWidget {
                     .toList(),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Un support : on l'ouvre, le système choisit l'application.
+class _LigneSupport extends StatelessWidget {
+  final Fiche support;
+
+  const _LigneSupport({required this.support});
+
+  @override
+  Widget build(BuildContext context) {
+    final titre = support.texte('titre',
+        alias: const ['nomFichierOriginal'], defaut: 'Support');
+    final description = support.texte('description');
+    final url = support.texte('url');
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: url.isEmpty ? null : () => Fichiers.ouvrirLien(url),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+          child: Row(
+            children: [
+              Icon(Icons.description_rounded,
+                  size: 22, color: AppTheme.primary),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(titre,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w700, fontSize: 14)),
+                    if (description.isNotEmpty)
+                      Text(description,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              fontSize: 12,
+                              color: AppTheme.textSecondaryOf(context))),
+                  ],
+                ),
+              ),
+              Icon(Icons.open_in_new_rounded,
+                  size: 18, color: AppTheme.textMutedOf(context)),
+            ],
+          ),
+        ),
       ),
     );
   }

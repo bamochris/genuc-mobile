@@ -414,9 +414,13 @@ class _CarteCours extends StatelessWidget {
           const SizedBox(height: 10),
           Text(
             cours.texte('titre', defaut: 'Cours sans titre'),
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
+            // Le nom du cours est CE qu'on cherche dans la carte : il passe
+            // devant la pastille de niveau et le code, qui ne servent qu'a
+            // trancher entre deux homonymes.
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontSize: 19,
+                  height: 1.25,
+                  fontWeight: FontWeight.w900,
                 ),
           ),
           if (cours.texte('description').isNotEmpty) ...[
@@ -452,6 +456,15 @@ class _CarteCours extends StatelessWidget {
                 texte: '${cours.entier('heures')} h',
                 couleur: teinteNiveau,
               ),
+              // Un meme cours peut etre donne a plusieurs promotions ET
+              // plusieurs filieres : la promotion seule ne dit pas de quelle
+              // cohorte il s'agit.
+              if (cours.texte('filiereNom').isNotEmpty)
+                _Meta(
+                  icone: Icons.account_tree_rounded,
+                  texte: cours.texte('filiereNom'),
+                  couleur: teinteNiveau,
+                ),
               _Meta(
                 icone: Icons.menu_book_rounded,
                 // `promotionLibelle` est la clé réellement rendue par le
