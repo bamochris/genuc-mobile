@@ -24,6 +24,26 @@ const Map<String, (String, Color, IconData)> statutsCours = {
   'BROUILLON': ('Brouillon', AppTheme.statutNavy, Icons.edit_rounded),
 };
 
+/// Volume horaire d'un cours, tel qu'il se lit sur une carte.
+///
+/// Deux chiffres, deux natures : le volume ANNUEL déclaré au programme
+/// (« 60 h/an ») et les heures RÉSERVÉES chaque semaine à l'emploi du temps
+/// (« 4 h/sem »), déduites des créneaux. Les deux sont montrés quand les deux
+/// sont connus — ils ne disent pas la même chose, et l'écart entre eux est
+/// justement ce qu'un enseignant veut voir.
+///
+/// Quand aucun n'est renseigné : « — h », jamais « 0 h ». Un zéro se lit « ce
+/// cours n'a pas d'heures », ce qui est faux — il n'en a pas encore de
+/// déclarées, et aucun créneau ne lui est réservé.
+String libelleVolume(Fiche cours) {
+  final parts = <String>[
+    if (cours.entier('volumeHoraireAnnuel') > 0)
+      '${cours.entier('volumeHoraireAnnuel')} h/an',
+    if (cours.entier('heures') > 0) '${cours.entier('heures')} h/sem',
+  ];
+  return parts.isEmpty ? '— h' : parts.join(' · ');
+}
+
 /// Couleur par niveau (`NIVEAU_COLORS` côté web).
 Color couleurNiveau(String niveau) => switch (niveau) {
       'L1' => AppTheme.statutBleu,
@@ -453,13 +473,7 @@ class _CarteCours extends StatelessWidget {
               ),
               _Meta(
                 icone: Icons.schedule_rounded,
-                // Le volume DECLARE au programme prime : c'est le chiffre du
-                // syllabus. A defaut, celui deduit des creneaux, qui est
-                // hebdomadaire — l'unite est ecrite pour ne pas confondre
-                // « 60 h sur l'annee » et « 4 h par semaine ».
-                texte: cours.entier('volumeHoraireAnnuel') > 0
-                    ? '${cours.entier('volumeHoraireAnnuel')} h/an'
-                    : '${cours.entier('heures')} h/sem',
+                texte: libelleVolume(cours),
                 couleur: teinteNiveau,
               ),
               // Un meme cours peut etre donne a plusieurs promotions ET
