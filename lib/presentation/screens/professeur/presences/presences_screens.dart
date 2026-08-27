@@ -13,6 +13,7 @@ import '../../../../data/services/professeur_pedagogie_service.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../widgets/formulaire_dynamique.dart';
 import '../../../widgets/portail_widgets.dart';
+import 'smart_presence_screen.dart';
 
 /// Module « Présences » du portail enseignant : saisie manuelle, QR imprimé,
 /// historique et statistiques.
@@ -393,9 +394,15 @@ class _LignePresence extends StatelessWidget {
 // QR de présence imprimable
 // ─────────────────────────────────────────────────────────────
 
-/// Génère le QR d'une séance, à projeter ou à imprimer.
+/// Génère le QR fixe d'une séance, destiné à être imprimé ou affiché.
 ///
-/// Distinct de Smart Présence : ce QR est statique, sans preuve de proximité.
+/// **Ce n'est pas l'écran de projection.** Le code produit ici est une image
+/// figée, sans preuve de proximité : photographié, il reste valable. Il rend
+/// service quand la salle n'a ni réseau ni vidéoprojecteur, et rien d'autre.
+/// La projection en séance, avec un code renouvelé toutes les quinze
+/// secondes, appartient à [SmartPresenceProfesseurScreen] — l'écran y renvoie
+/// désormais, parce que son ancien sous-titre « code à projeter » conduisait
+/// les enseignants ici, devant un QR immobile.
 class GenererQrScreen extends StatefulWidget {
   const GenererQrScreen({super.key});
 
@@ -448,8 +455,8 @@ class _GenererQrScreenState extends State<GenererQrScreen> {
   @override
   Widget build(BuildContext context) {
     return PagePortail(
-      titre: 'Présences QR',
-      sousTitre: 'Code à projeter en début de séance',
+      titre: 'QR imprimable',
+      sousTitre: 'Code fixe, à imprimer ou afficher en salle',
       onRafraichir: _chargerCours,
       corps: EtatRequete(
         chargement: _chargement,
@@ -466,6 +473,14 @@ class _GenererQrScreenState extends State<GenererQrScreen> {
                 succes: false,
                 onFermer: () => setState(() => _message = null),
               ),
+            _AiguillageSmartPresence(
+              onOuvrir: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const SmartPresenceProfesseurScreen(),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
             CartePortail(
               child: SelecteurCours(
                 valeur: _coursId,
@@ -539,6 +554,66 @@ class _GenererQrScreenState extends State<GenererQrScreen> {
     final image = _image;
     if (image == null) return;
     await Fichiers.enregistrerEtOuvrir(image, 'qr-presence.png');
+  }
+}
+
+/// Renvoie vers l'écran de projection quand c'est lui qui est cherché.
+///
+/// Deux entrées de menu portent un QR ; celle-ci annonçait « code à
+/// projeter » et rendait une image immobile. Plutôt que de laisser
+/// l'enseignant conclure que la rotation du code est en panne, l'écran dit
+/// laquelle des deux fait quoi.
+class _AiguillageSmartPresence extends StatelessWidget {
+  final VoidCallback onOuvrir;
+
+  const _AiguillageSmartPresence({required this.onOuvrir});
+
+  @override
+  Widget build(BuildContext context) {
+    return CartePortail(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.cast_rounded, size: 20, color: AppTheme.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Vous cherchez le code à projeter ?',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Le code de cette page est fixe : il sert à être imprimé ou '
+            'affiché en salle, et ne change jamais.\n\n'
+            'Pour la projection en séance, ouvrez Smart Présence : le code y '
+            'se renouvelle toutes les quinze secondes, ce qui rend une photo '
+            'du tableau inutilisable.',
+            style: TextStyle(
+              fontSize: 12,
+              height: 1.45,
+              color: AppTheme.textSecondaryOf(context),
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: onOuvrir,
+              icon: const Icon(Icons.fingerprint_rounded, size: 18),
+              label: const Text('Ouvrir Smart Présence'),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

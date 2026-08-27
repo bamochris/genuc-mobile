@@ -53,7 +53,10 @@ class _MesCoursProfesseurScreenState extends State<MesCoursProfesseurScreen> {
   Map<String, String> _typeParVacation = const {};
 
   bool _chargement = true;
+  bool _publication = false;
   String? _erreur;
+  String? _message;
+  bool _messageSucces = true;
   String _recherche = '';
   String? _filtreStatut;
   String? _filtreNiveau;
@@ -125,6 +128,66 @@ class _MesCoursProfesseurScreenState extends State<MesCoursProfesseurScreen> {
     }).toList();
   }
 
+  /// Le serveur n'ouvre `PATCH /api/cours/{id}/publier` qu'à PROFESSEUR et
+  /// ADMIN_UNIVERSITE. Afficher le bouton à quelqu'un d'autre serait lui
+  /// promettre une action qui reviendrait en 403.
+  bool get _peutPublier {
+    final role =
+        (context.read<AuthProvider>().user?.role ?? '').toUpperCase();
+    return role == 'PROFESSEUR' || role == 'ADMIN_UNIVERSITE';
+  }
+
+  Future<void> _publier(Fiche cours) async {
+    final titre = cours.texte('titre', defaut: 'ce cours');
+    final confirme = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        icon: Icon(Icons.public_rounded, color: AppTheme.statutVert),
+        title: const Text('Publier le cours'),
+        content: Text(
+          '« $titre » deviendra visible par les étudiants de sa promotion, '
+          'avec ses leçons et ses supports.\n\n'
+          'Vérifiez son contenu avant : la publication est immédiate.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Annuler'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Publier'),
+          ),
+        ],
+      ),
+    );
+    if (confirme != true || !mounted) return;
+
+    setState(() {
+      _publication = true;
+      _message = null;
+    });
+    try {
+      await context
+          .read<ProfesseurPedagogieService>()
+          .publierCours(cours.id);
+      if (!mounted) return;
+      setState(() {
+        _message = '« $titre » est publié : les étudiants le voient.';
+        _messageSucces = true;
+      });
+      await _charger();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _message = e is ApiException ? e.message : e.toString();
+        _messageSucces = false;
+      });
+    } finally {
+      if (mounted) setState(() => _publication = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final niveaux = _cours
@@ -160,6 +223,14 @@ class _MesCoursProfesseurScreenState extends State<MesCoursProfesseurScreen> {
           padding: Responsive.margePage(context),
           physics: const AlwaysScrollableScrollPhysics(),
           children: [
+            if (_message != null) ...[
+              BandeauMessage(
+                message: _message!,
+                succes: _messageSucces,
+                onFermer: () => setState(() => _message = null),
+              ),
+              const SizedBox(height: 12),
+            ],
             RangeeKpi(
               tuiles: [
                 TuileKpi(
@@ -238,7 +309,12 @@ class _MesCoursProfesseurScreenState extends State<MesCoursProfesseurScreen> {
               )
             else
               for (final cours in _filtres) ...[
-                _CarteCours(cours: cours),
+                _CarteCours(
+                  cours: cours,
+                  onPublier: _peutPublier && !_publication
+                      ? () => _publier(cours)
+                      : null,
+                ),
                 const SizedBox(height: 12),
               ],
           ],
@@ -251,7 +327,11 @@ class _MesCoursProfesseurScreenState extends State<MesCoursProfesseurScreen> {
 class _CarteCours extends StatelessWidget {
   final Fiche cours;
 
-  const _CarteCours({required this.cours});
+  /// Nul quand la publication n'est pas offerte : rôle sans le droit, ou
+  /// publication déjà en cours.
+  final VoidCallback? onPublier;
+
+  const _CarteCours({required this.cours, this.onPublier});
 
   @override
   Widget build(BuildContext context) {
@@ -333,13 +413,40 @@ class _CarteCours extends StatelessWidget {
               ),
               _Meta(
                 icone: Icons.menu_book_rounded,
-                texte: cours.texte('promotion', alias: const ['annee'],
-                    defaut: '—'),
+                // `promotionLibelle` est la clé réellement rendue par le
+                // serveur ; `promotion` n'a jamais existé dans CoursResponse,
+                // et la ligne affichait « — » sur tous les cours.
+                texte: cours.texte('promotionLibelle',
+                    alias: const ['promotion', 'annee'], defaut: '—'),
                 couleur: teinteNiveau,
               ),
             ],
           ),
           const SizedBox(height: 12),
+          // Un cours naît en BROUILLON et reste invisible à sa promotion
+          // tant qu'il n'est pas publié. Le geste n'existait que sur le
+          // web : l'enseignant qui travaille depuis son téléphone voyait la
+          // pastille « Brouillon » sans aucun moyen d'en sortir.
+          if (onPublier != null && cours.texte('statut') == 'BROUILLON') ...[
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: onPublier,
+                icon: const Icon(Icons.public_rounded, size: 18),
+                label: const Text('Publier le cours'),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Ce cours est encore un brouillon : vos étudiants ne le voient '
+              'pas.',
+              style: TextStyle(
+                fontSize: 11,
+                color: AppTheme.textSecondaryOf(context),
+              ),
+            ),
+            const SizedBox(height: 6),
+          ],
           Divider(color: AppTheme.borderOf(context), height: 1),
           const SizedBox(height: 6),
           SingleChildScrollView(

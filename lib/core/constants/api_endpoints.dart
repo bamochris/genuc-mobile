@@ -295,6 +295,8 @@ class ApiEndpoints {
   static String coursProfesseur(String professeurId) =>
       '/api/cours/professeur/$professeurId';
   static String coursDetail(String coursId) => '/api/cours/$coursId';
+  static String coursPublier(String coursId) =>
+      '/api/cours/$coursId/publier';
   static String coursEtudiants(String coursId) => '/api/cours/$coursId/etudiants';
   static String coursSupports(String coursId) => '/api/cours/$coursId/supports';
   static String support(String supportId) => '/api/cours/supports/$supportId';

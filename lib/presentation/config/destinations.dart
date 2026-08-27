@@ -730,7 +730,7 @@ class MenuPortail {
           _profSmartPresence,
           Destination(
             chemin: '/professeur/presences/qrcode',
-            libelle: 'Présences QR',
+            libelle: 'QR imprimable',
             icone: Icons.qr_code_2_rounded,
             couleur: _bleu,
             construire: (_) => const GenererQrScreen(),

@@ -279,14 +279,45 @@ class _SmartPresenceProfesseurScreenState
                   ),
                 ),
                 const SizedBox(height: 10),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: ElevatedButton.icon(
-                    onPressed: _action ? null : () => _ouvrir(seance),
-                    icon: const Icon(Icons.play_arrow_rounded, size: 18),
-                    label: const Text('Ouvrir la séance'),
+                if (seance['dejaTenue'] == true) ...[
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.task_alt_rounded,
+                        size: 16,
+                        color: AppTheme.statutVert,
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          _libelleDejaTenue(seance),
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.statutVert,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Une séance ne s\'ouvre qu\'une seule fois par jour. Pour '
+                    'rattraper un oubli, utilisez la saisie manuelle.',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: AppTheme.textSecondaryOf(context),
+                    ),
+                  ),
+                ] else
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: ElevatedButton.icon(
+                      onPressed: _action ? null : () => _ouvrir(seance),
+                      icon: const Icon(Icons.play_arrow_rounded, size: 18),
+                      label: const Text('Ouvrir la séance'),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -353,27 +384,14 @@ class _SmartPresenceProfesseurScreenState
     return CartePortail(
       child: Column(
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                'À projeter — le code change toutes les '
-                '${session.qrValiditeSecondes} s',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: AppTheme.textSecondaryOf(context),
-                ),
-              ),
-              const SizedBox(width: 8),
-              GestureDetector(
-                onTap: () => _ouvrirQrPleinEcran(session),
-                child: Icon(
-                  Icons.fullscreen_rounded,
-                  size: 20,
-                  color: AppTheme.primary,
-                ),
-              ),
-            ],
+          Text(
+            'Le code change tout seul toutes les '
+            '${session.qrValiditeSecondes} secondes.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 12,
+              color: AppTheme.textSecondaryOf(context),
+            ),
           ),
           const SizedBox(height: 12),
           // Fond blanc et marge imposés : un QR posé sur la surface ardoise du
@@ -390,6 +408,21 @@ class _SmartPresenceProfesseurScreenState
                 // Correction élevée : le code est lu de loin, souvent de biais,
                 // sur un vidéoprojecteur mal réglé.
                 errorCorrectionLevel: QrErrorCorrectLevel.H,
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          // Un vrai bouton, nommé et pleine largeur : l'icône « plein écran »
+          // posée à côté du texte ne se lisait pas comme une commande, et
+          // la projection restait introuvable.
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () => _ouvrirQrPleinEcran(session),
+              icon: const Icon(Icons.cast_rounded, size: 20),
+              label: const Text('Projeter en plein écran'),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
               ),
             ),
           ),
@@ -453,6 +486,16 @@ class _SmartPresenceProfesseurScreenState
         _ => code,
       };
 
+  /// « Présence déjà tenue à 08:05 » quand le serveur donne l\'heure.
+  static String _libelleDejaTenue(Map<String, dynamic> seance) {
+    final heure = seance['heureSeanceTenue'];
+    final texte = heure == null ? '' : '$heure';
+    if (texte.length >= 5) {
+      return 'Présence déjà tenue aujourd\'hui à ${texte.substring(0, 5)}';
+    }
+    return 'Présence déjà tenue aujourd\'hui';
+  }
+
   Future<void> _ouvrir(Map<String, dynamic> seance) async {
     final coursId = seance['coursId'];
     if (coursId is! int) {
@@ -462,6 +505,33 @@ class _SmartPresenceProfesseurScreenState
       });
       return;
     }
+
+    // L'ouverture est irréversible pour la journée : le professeur doit le
+    // savoir avant, et non le découvrir en butant sur le refus du serveur.
+    final confirme = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        icon: Icon(Icons.warning_amber_rounded, color: AppTheme.statutOrange),
+        title: const Text('Une seule ouverture par jour'),
+        content: Text(
+          'La présence de « ${seance['coursTitre'] ?? 'ce cours'} » ne peut '
+          'être ouverte qu\'une seule fois aujourd\'hui.\n\n'
+          'Une fois la séance close, elle ne pourra pas être rouverte : un '
+          'oubli se rattrape alors par la saisie manuelle.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Annuler'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Ouvrir la séance'),
+          ),
+        ],
+      ),
+    );
+    if (confirme != true || !mounted) return;
 
     setState(() => _action = true);
     try {
@@ -508,10 +578,13 @@ class _SmartPresenceProfesseurScreenState
     final confirme = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
+        icon: Icon(Icons.warning_amber_rounded, color: AppTheme.statutOrange),
         title: const Text('Clore la séance'),
         content: const Text(
-          'Plus aucun étudiant ne pourra pointer. '
-          'Les absents seront enregistrés comme tels.',
+          'Plus aucun étudiant ne pourra pointer, et les absents seront '
+          'enregistrés comme tels.\n\n'
+          'Cette séance ne pourra pas être rouverte aujourd\'hui : n\'attendez '
+          'plus personne avant de clore.',
         ),
         actions: [
           TextButton(

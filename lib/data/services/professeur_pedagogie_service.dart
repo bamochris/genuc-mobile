@@ -22,6 +22,17 @@ class ProfesseurPedagogieService extends ServiceApi {
 
   Future<Fiche> cours(String coursId) => ficheDe(ApiEndpoints.coursDetail(coursId));
 
+  /// Rend un cours visible aux étudiants : BROUILLON → PUBLIE.
+  ///
+  /// `PATCH /api/cours/{id}/publier`, réservé côté serveur à PROFESSEUR et
+  /// ADMIN_UNIVERSITE. Le geste n'existait que sur le web : sur mobile,
+  /// l'enseignant voyait la pastille « Brouillon » sans aucun moyen d'en
+  /// sortir, et son cours restait invisible à sa promotion.
+  Future<Fiche> publierCours(String coursId) => corriger(
+        ApiEndpoints.coursPublier(coursId),
+        contexte: 'La publication du cours a échoué.',
+      );
+
   Future<List<Fiche>> etudiantsDuCours(String coursId) =>
       listeDe(ApiEndpoints.coursEtudiants(coursId));
 

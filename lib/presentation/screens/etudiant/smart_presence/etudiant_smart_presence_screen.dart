@@ -523,59 +523,125 @@ class _CarteScanner extends StatefulWidget {
   State<_CarteScanner> createState() => _CarteScannerState();
 }
 
-class _CarteScannerState extends State<_CarteScanner> {
+class _CarteScannerState extends State<_CarteScanner>
+    with WidgetsBindingObserver {
   MobileScannerController? _controller;
   bool _derniereDetection = false;
   String? _erreurCamera;
+  bool _permissionBloquee = false;
+  bool _enCoursDemarrage = false;
 
   @override
   void initState() {
     super.initState();
-    _demarrerScan();
-  }
-
-  Future<void> _demarrerScan() async {
-    if (!mounted) return;
-    setState(() => _erreurCamera = null);
-
-    final status = await Permission.camera.status;
-    if (status.isDenied || status.isPermanentlyDenied) {
-      final requested = await Permission.camera.request();
-      if (!requested.isGranted) {
-        if (mounted) {
-          setState(() {
-            _erreurCamera = 'Permission caméra refusée. Autorisez l\'accès dans les paramètres.';
-          });
-        }
-        return;
-      }
-    }
-
-    try {
-      final ctrl = MobileScannerController(
-        detectionSpeed: DetectionSpeed.noDuplicates,
-        autoStart: false,
-      );
-      await ctrl.start();
-      if (mounted) {
-        setState(() {
-          _controller = ctrl;
-          _erreurCamera = null;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _erreurCamera = 'Impossible d\'accéder à la caméra. Utilisez la saisie manuelle.';
-        });
-      }
-    }
+    WidgetsBinding.instance.addObserver(this);
+    unawaited(_demarrerScan());
   }
 
   @override
   void dispose() {
-    _controller?.dispose();
+    WidgetsBinding.instance.removeObserver(this);
+    unawaited(_controller?.dispose());
+    _controller = null;
     super.dispose();
+  }
+
+  /// Le système reprend la caméra dès que l'application passe en arrière-plan :
+  /// sans ce relais, l'aperçu revient figé en noir. `MobileScanner` ne pose son
+  /// propre observateur que lorsqu'il fabrique lui-même le contrôleur, ce qui
+  /// n'est pas le cas ici.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final controller = _controller;
+    if (controller == null ||
+        _enCoursDemarrage ||
+        !controller.value.hasCameraPermission) {
+      return;
+    }
+
+    switch (state) {
+      case AppLifecycleState.detached:
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.paused:
+        return;
+      case AppLifecycleState.resumed:
+        unawaited(_reprendre(controller));
+      case AppLifecycleState.inactive:
+        unawaited(_suspendre(controller));
+    }
+  }
+
+  Future<void> _reprendre(MobileScannerController controller) async {
+    try {
+      await controller.start();
+    } on MobileScannerException {
+      // Rien à signaler ici : `errorBuilder` affiche déjà l'état de la caméra.
+    }
+  }
+
+  Future<void> _suspendre(MobileScannerController controller) async {
+    try {
+      await controller.stop();
+    } on MobileScannerException {
+      // La caméra était déjà arrêtée.
+    }
+  }
+
+  /// Demande la permission puis confie le démarrage au widget `MobileScanner`.
+  ///
+  /// Le contrôleur ne doit **pas** être démarré ici : depuis `mobile_scanner` 7,
+  /// `start()` attend d'abord (500 ms) que le contrôleur soit rattaché à un
+  /// widget `MobileScanner`. Démarrer avant de construire ce widget était donc
+  /// un blocage circulaire — l'attente expirait en `controllerNotAttached`, les
+  /// trois tentatives échouaient et la caméra ne s'ouvrait jamais, quel que
+  /// soit l'appareil.
+  Future<void> _demarrerScan() async {
+    if (_enCoursDemarrage) return;
+    setState(() {
+      _enCoursDemarrage = true;
+      _erreurCamera = null;
+      _permissionBloquee = false;
+    });
+
+    // Retirer l'aperçu de l'arbre avant de libérer l'ancien contrôleur : le
+    // greffon ne gère qu'une seule session caméra, une libération tardive
+    // couperait celle qu'on vient d'ouvrir.
+    final ancien = _controller;
+    if (ancien != null) {
+      setState(() => _controller = null);
+      await WidgetsBinding.instance.endOfFrame;
+      await ancien.dispose();
+      if (!mounted) return;
+    }
+
+    var statut = await Permission.camera.status;
+    if (statut.isDenied) {
+      statut = await Permission.camera.request();
+    }
+    if (!mounted) return;
+
+    if (!statut.isGranted && !statut.isLimited) {
+      setState(() {
+        _permissionBloquee = statut.isPermanentlyDenied || statut.isRestricted;
+        _erreurCamera = _permissionBloquee
+            ? 'Accès à la caméra bloqué. Autorisez la caméra dans les '
+                'paramètres de l\'application, puis réessayez.'
+            : 'Permission caméra refusée. Autorisez l\'accès pour scanner le QR.';
+        _enCoursDemarrage = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _derniereDetection = false;
+      // `autoStart` reste à sa valeur par défaut (true) : c'est `MobileScanner`
+      // qui démarre le contrôleur une fois qu'il s'y est rattaché.
+      _controller = MobileScannerController(
+        detectionSpeed: DetectionSpeed.noDuplicates,
+        formats: const [BarcodeFormat.qrCode],
+      );
+      _enCoursDemarrage = false;
+    });
   }
 
   void _onDetect(BarcodeCapture capture) {
@@ -622,6 +688,98 @@ class _CarteScannerState extends State<_CarteScanner> {
     }
   }
 
+  /// Message lisible pour un échec remonté par le greffon — le détail brut est
+  /// conservé pour que l'utilisateur puisse le rapporter.
+  String _messageErreur(MobileScannerException erreur) {
+    if (erreur.errorCode == MobileScannerErrorCode.permissionDenied) {
+      return 'Accès à la caméra refusé. Autorisez la caméra dans les '
+          'paramètres de l\'application.';
+    }
+    if (erreur.errorCode == MobileScannerErrorCode.unsupported) {
+      return 'Cet appareil ne prend pas en charge le scan : utilisez la '
+          'saisie manuelle.';
+    }
+    final details = erreur.errorDetails?.message;
+    return details == null || details.isEmpty
+        ? 'Caméra indisponible : utilisez la saisie manuelle.'
+        : 'Caméra indisponible : $details';
+  }
+
+  Widget _voletNoir({required String message, required bool parametres}) {
+    return Container(
+      color: Colors.black,
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.videocam_off_rounded,
+                  color: Colors.white54, size: 48),
+              const SizedBox(height: 12),
+              Text(
+                message,
+                style: const TextStyle(color: Colors.white),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                alignment: WrapAlignment.center,
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: _enCoursDemarrage ? null : _demarrerScan,
+                    icon: const Icon(Icons.refresh_rounded),
+                    label: const Text('Réessayer'),
+                  ),
+                  if (parametres)
+                    TextButton.icon(
+                      onPressed: () => unawaited(openAppSettings()),
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.white,
+                      ),
+                      icon: const Icon(Icons.settings_rounded),
+                      label: const Text('Ouvrir les paramètres'),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _apercu() {
+    final erreur = _erreurCamera;
+    if (erreur != null) {
+      return _voletNoir(message: erreur, parametres: _permissionBloquee);
+    }
+
+    final controller = _controller;
+    if (controller == null) {
+      return const ColoredBox(
+        color: Colors.black,
+        child: Center(child: CircularProgressIndicator(color: Colors.white)),
+      );
+    }
+
+    return MobileScanner(
+      key: ValueKey(controller),
+      controller: controller,
+      onDetect: _onDetect,
+      placeholderBuilder: (context) => const ColoredBox(
+        color: Colors.black,
+        child: Center(child: CircularProgressIndicator(color: Colors.white)),
+      ),
+      errorBuilder: (context, error) => _voletNoir(
+        message: _messageErreur(error),
+        parametres: error.errorCode == MobileScannerErrorCode.permissionDenied,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -644,75 +802,7 @@ class _CarteScannerState extends State<_CarteScanner> {
           const SizedBox(height: 16),
           ClipRRect(
             borderRadius: BorderRadius.circular(12),
-            child: SizedBox(
-              height: 280,
-              child: _erreurCamera != null
-                  ? Container(
-                      color: Colors.black,
-                      child: Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.videocam_off_rounded,
-                                  color: Colors.white54, size: 48),
-                              const SizedBox(height: 12),
-                              Text(
-                                _erreurCamera!,
-                                style: const TextStyle(color: Colors.white),
-                                textAlign: TextAlign.center,
-                              ),
-                              const SizedBox(height: 16),
-                              ElevatedButton.icon(
-                                onPressed: _demarrerScan,
-                                icon: const Icon(Icons.refresh_rounded),
-                                label: const Text('Réessayer'),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    )
-                  : _controller == null
-                      ? Container(
-                          color: Colors.black,
-                          child: const Center(
-                            child: CircularProgressIndicator(color: Colors.white),
-                          ),
-                        )
-                      : MobileScanner(
-                          controller: _controller!,
-                          onDetect: _onDetect,
-                          errorBuilder: (context, error) => Container(
-                            color: Colors.black,
-                            child: Center(
-                              child: Padding(
-                                padding: const EdgeInsets.all(16),
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Icon(Icons.videocam_off_rounded,
-                                        color: Colors.white54, size: 48),
-                                    const SizedBox(height: 12),
-                                    const Text(
-                                      'Caméra indisponible : utilisez la saisie manuelle.',
-                                      style: TextStyle(color: Colors.white),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                    const SizedBox(height: 16),
-                                    ElevatedButton.icon(
-                                      onPressed: _demarrerScan,
-                                      icon: const Icon(Icons.refresh_rounded),
-                                      label: const Text('Réessayer'),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-            ),
+            child: SizedBox(height: 280, child: _apercu()),
           ),
           if (widget.enCours) ...[
             const SizedBox(height: 12),
