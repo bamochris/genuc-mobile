@@ -256,7 +256,7 @@ class EtudiantAcademiqueService extends ServiceApi {
       supprimer(ApiEndpoints.document(id));
 
   Future<Fiche> carteEtudiant(String inscriptionId) => ficheDe(
-        ApiEndpoints.carteEtudiantDe(inscriptionId),
+        ApiEndpoints.carteEtudiantDonnees(inscriptionId),
         contexte: 'Votre carte étudiant n\'a pas pu être chargée.',
       );
 

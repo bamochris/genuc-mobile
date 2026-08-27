@@ -5,6 +5,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/responsive.dart';
 import '../../../data/services/appel_api.dart';
 import '../../widgets/formulaire_dynamique.dart';
+import '../../../core/utils/export_liste.dart';
 import '../../widgets/portail_widgets.dart';
 
 /// Comment présenter une fiche dans la liste.
@@ -57,6 +58,13 @@ class EcranRessource extends StatefulWidget {
   /// Actions supplémentaires proposées sur chaque fiche.
   final List<ActionFiche> actions;
 
+  /// Colonnes de l'export papier. Nulles : pas de bouton d'impression.
+  ///
+  /// L'export n'est pas deduit de [description] : ce qu'on lit a l'ecran et
+  /// ce qu'on veut sur papier ne coincident pas. Une liste d'appel veut le
+  /// matricule et le nom, pas la pastille de statut ni l'icone.
+  final List<ColonneExport>? colonnesExport;
+
   final String messageVide;
   final bool recherche;
 
@@ -77,6 +85,7 @@ class EcranRessource extends StatefulWidget {
     this.onSupprimer,
     this.onOuvrir,
     this.actions = const [],
+    this.colonnesExport,
     this.messageVide = 'Aucun élément à afficher.',
     this.recherche = true,
     this.entete,
@@ -162,6 +171,19 @@ class _EcranRessourceState extends State<EcranRessource> {
       titre: widget.titre,
       sousTitre: widget.sousTitre,
       onRafraichir: _charger,
+      // L'export porte la liste TELLE QU'ELLE EST FILTREE : c'est ce que
+      // l'utilisateur a sous les yeux qu'il veut sur papier.
+      actions: widget.colonnesExport == null
+          ? const []
+          : [
+              BoutonExportListe(
+                titre: widget.titre,
+                sousTitre: widget.sousTitre,
+                colonnes: widget.colonnesExport!,
+                lignes: _filtrees.map((f) => f.donnees).toList(),
+                compact: true,
+              ),
+            ],
       floatingActionButton: peutCreer
           ? FloatingActionButton.extended(
               onPressed: _ouvrirCreation,

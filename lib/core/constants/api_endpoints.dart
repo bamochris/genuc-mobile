@@ -123,6 +123,12 @@ class ApiEndpoints {
   static String carteEtudiantDe(String inscriptionId) =>
       '/api/carte-etudiant/$inscriptionId';
 
+  /// Données de la carte, pour l'afficher. La route sans suffixe rend le PDF
+  /// en pièce jointe : la lire comme du JSON faisait conclure « carte non
+  /// émise » à un écran qui n'avait jamais reçu le bon contrat.
+  static String carteEtudiantDonnees(String inscriptionId) =>
+      '/api/carte-etudiant/$inscriptionId/donnees';
+
   // ─── Dossier social et bourses ─────────────────────────────
   static const String socialDossiers = '/api/social/dossiers';
   static const String socialCalculBourse = '/api/social/calcul-bourse';

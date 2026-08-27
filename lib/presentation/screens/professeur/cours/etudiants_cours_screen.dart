@@ -5,6 +5,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../data/services/professeur_pedagogie_service.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../widgets/portail_widgets.dart';
+import '../../../../core/utils/export_liste.dart';
 import '../../commun/ecran_ressource.dart';
 
 /// Étudiants inscrits à un cours donné (`/api/cours/{id}/etudiants`).
@@ -26,6 +27,28 @@ class EtudiantsCoursScreen extends StatelessWidget {
       titre: 'Étudiants du cours',
       sousTitre: titreCours,
       messageVide: 'Aucun étudiant inscrit à ce cours.',
+      // La liste d'appel sur papier : matricule, nom, promotion. Ni icone
+      // ni pastille — ce qui se lit a l'ecran n'est pas ce qui s'imprime.
+      colonnesExport: [
+        ColonneExport(
+          libelle: 'Matricule',
+          valeur: (l) => '${l['matricule'] ?? ''}',
+        ),
+        ColonneExport(
+          libelle: 'Nom et prenom',
+          valeur: (l) => ['${l['prenom'] ?? ''}', '${l['nom'] ?? ''}']
+              .where((v) => v.isNotEmpty)
+              .join(' '),
+        ),
+        ColonneExport(
+          libelle: 'Promotion',
+          valeur: (l) => '${l['promotion'] ?? ''}',
+        ),
+        ColonneExport(
+          libelle: 'Filiere',
+          valeur: (l) => '${l['filiere'] ?? ''}',
+        ),
+      ],
       charger: () => service.etudiantsDuCours(coursId),
       description: DescriptionFiche(
         icone: Icons.groups_rounded,
@@ -56,6 +79,28 @@ class MesEtudiantsScreen extends StatelessWidget {
       titre: 'Mes étudiants',
       sousTitre: 'Tous cours confondus',
       messageVide: 'Aucun étudiant trouvé.',
+      // La liste d'appel sur papier : matricule, nom, promotion. Ni icone
+      // ni pastille — ce qui se lit a l'ecran n'est pas ce qui s'imprime.
+      colonnesExport: [
+        ColonneExport(
+          libelle: 'Matricule',
+          valeur: (l) => '${l['matricule'] ?? ''}',
+        ),
+        ColonneExport(
+          libelle: 'Nom et prenom',
+          valeur: (l) => ['${l['prenom'] ?? ''}', '${l['nom'] ?? ''}']
+              .where((v) => v.isNotEmpty)
+              .join(' '),
+        ),
+        ColonneExport(
+          libelle: 'Promotion',
+          valeur: (l) => '${l['promotion'] ?? ''}',
+        ),
+        ColonneExport(
+          libelle: 'Filiere',
+          valeur: (l) => '${l['filiere'] ?? ''}',
+        ),
+      ],
       charger: () => service.mesEtudiants(professeurId),
       description: DescriptionFiche(
         icone: Icons.school_rounded,
