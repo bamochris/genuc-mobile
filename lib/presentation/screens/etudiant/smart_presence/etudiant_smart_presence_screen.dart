@@ -5,6 +5,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 
+import '../../../../core/errors/api_exception.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/presence_contexte.dart';
 import '../../../../data/models/smart_presence/attendance_models.dart';
@@ -25,7 +26,14 @@ import '../../../widgets/portail_widgets.dart';
 ///     optionnels, jamais bloquants (le serveur les traite comme des indices
 ///     et signale la présence au professeur en cas de doute).
 /// Phases du flux de marquage de présence.
-enum _Phase { initial, verification, proximiteOk, proximiteKo, scanner }
+///
+/// [dejaPresent] remplace l'ancienne valeur `scanner`, qui n'était jamais
+/// utilisée. Une présence déjà enregistrée n'est pas un échec : la traiter
+/// comme tel — bandeau rouge, invitation à rescanner — poussait l'étudiant à
+/// recommencer indéfiniment un geste que le serveur refusera toujours, la
+/// contrainte d'unicité (séance, étudiant) étant précisément ce qui protège
+/// sa présence.
+enum _Phase { initial, verification, proximiteOk, proximiteKo, dejaPresent }
 
 class EtudiantSmartPresenceScreen extends StatefulWidget {
   const EtudiantSmartPresenceScreen({super.key});
@@ -126,13 +134,35 @@ class _EtudiantSmartPresenceScreenState
       });
     } catch (e) {
       if (mounted) {
+        // Le code métier fait foi : `ApiException` le porte (clé `code` de la
+        // réponse). Chercher le code dans `toString()` marchait par accident
+        // et cessait de marcher dès que le serveur reformulait son message.
+        final code = e is ApiException ? e.code : null;
+        if (code == 'PRESENCE_DEJA_ENREGISTREE') {
+          setState(() {
+            _phase = _Phase.dejaPresent;
+            _erreur = null;
+          });
+          return;
+        }
+        // Un refus de proximité porte SON message : il nomme le lieu et la
+        // distance. Le remplacer par « Impossible de démarrer la vérification »
+        // effacerait la seule information utile à l'étudiant.
+        if (code == 'PROXIMITE_REFUSEE') {
+          setState(() {
+            _erreur = e is ApiException ? e.message : e.toString();
+            _phase = _Phase.proximiteKo;
+          });
+          return;
+        }
         setState(() {
           final msg = e.toString();
-          if (msg.contains('SESSION_FERMEE') || msg.contains('SESSION_EXPIREE')) {
+          if (code == 'SESSION_FERMEE' || code == 'SESSION_EXPIREE'
+              || msg.contains('SESSION_FERMEE') || msg.contains('SESSION_EXPIREE')) {
             _erreur = 'Cette séance de présence est terminée.';
-          } else if (msg.contains('PRESENCE_DEJA_ENREGISTREE')) {
-            _erreur = 'Votre présence est déjà enregistrée pour cette séance.';
-          } else if (msg.contains('HORS_PROMOTION')) {
+          } else if (code == 'HORS_VACATION') {
+            _erreur = 'Cette séance appartient à une autre vacation que la vôtre.';
+          } else if (code == 'HORS_PROMOTION' || msg.contains('HORS_PROMOTION')) {
             _erreur = 'Ce cours ne fait pas partie de votre programme.';
           } else if (msg.contains('500') || msg.contains('Internal')) {
             _erreur = 'Erreur serveur. Réessayez dans un instant.';
@@ -165,6 +195,15 @@ class _EtudiantSmartPresenceScreenState
       final resultat = ScanQrResponseDto.fromJson(res);
       // Une preuve ne sert qu'une fois : la conserver ferait échouer un
       // éventuel second essai avec un message trompeur.
+      if (resultat.code == 'PRESENCE_DEJA_ENREGISTREE') {
+        setState(() {
+          _phase = _Phase.dejaPresent;
+          _proofToken = null;
+          _fige = true;
+          _erreur = null;
+        });
+        return;
+      }
       setState(() {
         _resultat = resultat;
         _proofToken = null;
@@ -172,10 +211,20 @@ class _EtudiantSmartPresenceScreenState
       });
     } catch (e) {
       if (mounted) {
+        final code = e is ApiException ? e.code : null;
+        if (code == 'PRESENCE_DEJA_ENREGISTREE') {
+          setState(() {
+            _phase = _Phase.dejaPresent;
+            _proofToken = null;
+            _fige = true;
+            _erreur = null;
+          });
+          return;
+        }
         final msg = e.toString();
         String message;
-        if (msg.contains('PRESENCE_DEJA_ENREGISTREE')) {
-          message = 'Votre présence est déjà enregistrée.';
+        if (code == 'HORS_VACATION') {
+          message = 'Cette séance appartient à une autre vacation que la vôtre.';
         } else if (msg.contains('PRESENCE_REFUSEE') || msg.contains('refus')) {
           message = 'Présence refusée. Réessayez.';
         } else if (msg.contains('500') || msg.contains('Internal')) {
@@ -216,7 +265,16 @@ class _EtudiantSmartPresenceScreenState
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   if (_erreur != null) _Bandeau(message: _erreur!, erreur: true),
-                  if (_resultat != null)
+                  // La présence déjà prise passe AVANT tout le reste : ni
+                  // bouton, ni scanner, ni carte de résultat. Il n'y a plus
+                  // rien à faire, et l'écran doit le dire au lieu de laisser
+                  // croire à un échec qu'on pourrait rattraper.
+                  if (_phase == _Phase.dejaPresent)
+                    _CarteDejaPresent(
+                      session: _session,
+                      onActualiser: _recommencer,
+                    )
+                  else if (_resultat != null)
                     _CarteResultat(resultat: _resultat!, onRecommencer: _recommencer)
                   else if (_session != null) ...[
                     _CarteSession(session: _session!),
@@ -820,6 +878,79 @@ class _CarteScannerState extends State<_CarteScanner>
             onPressed: widget.enCours ? null : _saisieManuelle,
             icon: const Icon(Icons.keyboard_rounded),
             label: const Text('Je n\'arrive pas à scanner'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// « Vous avez déjà marqué votre présence » — un aboutissement, pas une erreur.
+///
+/// Une présence ne se prend qu'une fois par séance : la contrainte d'unicité
+/// (séance, étudiant) est ce qui empêche qu'on la lui reprenne ou qu'on la
+/// double. L'écran affichait pourtant un bandeau rouge et un bouton de
+/// reprise, si bien que l'étudiant rescannait — en vain, et en croyant que
+/// sa présence n'était pas passée.
+class _CarteDejaPresent extends StatelessWidget {
+  final AttendanceSessionDto? session;
+  final VoidCallback onActualiser;
+
+  const _CarteDejaPresent({required this.session, required this.onActualiser});
+
+  @override
+  Widget build(BuildContext context) {
+    final cours = session?.coursTitre;
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: AppTheme.success.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppTheme.success.withValues(alpha: 0.45)),
+      ),
+      child: Column(
+        children: [
+          Icon(Icons.verified_rounded, size: 56, color: AppTheme.success),
+          const SizedBox(height: 14),
+          Text(
+            'Présence déjà enregistrée',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w900,
+                  color: AppTheme.success,
+                ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            cours == null || cours.isEmpty
+                ? 'Vous avez déjà marqué votre présence pour cette séance. '
+                    'Une présence ne se prend qu\'une seule fois : il n\'y a '
+                    'rien de plus à faire.'
+                : 'Vous avez déjà marqué votre présence pour « $cours ». '
+                    'Une présence ne se prend qu\'une seule fois : il n\'y a '
+                    'rien de plus à faire.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 13,
+              height: 1.5,
+              color: AppTheme.textSecondaryOf(context),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Si vous pensez qu\'il s\'agit d\'une erreur, signalez-le à votre '
+            'enseignant : lui seul peut arbitrer une présence.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 12,
+              color: AppTheme.textMutedOf(context),
+            ),
+          ),
+          const SizedBox(height: 18),
+          OutlinedButton.icon(
+            onPressed: onActualiser,
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text('Actualiser'),
           ),
         ],
       ),

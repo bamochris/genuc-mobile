@@ -107,10 +107,32 @@ class _MessagerieScreenState extends State<MessagerieScreen> {
                 onFermer: () => setState(() => _message = null),
               ),
             for (final message in _messages) ...[
-              _CarteMessage(
-                message: message,
-                onOuvrir: () => _ouvrir(message),
-                onSupprimer: () => _supprimer(message),
+              // Balayer pour supprimer : le geste que tout le monde essaie
+              // d'abord sur une boîte de réception. La confirmation reste —
+              // un balayage part vite, et la suppression est définitive.
+              Dismissible(
+                key: ValueKey('message-${message.id}'),
+                direction: DismissDirection.endToStart,
+                confirmDismiss: (_) => _confirmerEtSupprimer(message),
+                onDismissed: (_) => setState(
+                    () => _messages.removeWhere((m) => m.id == message.id)),
+                background: Container(
+                  alignment: Alignment.centerRight,
+                  padding: const EdgeInsets.only(right: 24),
+                  decoration: BoxDecoration(
+                    color: AppTheme.error.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Icon(Icons.delete_outline_rounded,
+                      color: AppTheme.error, size: 26),
+                ),
+                child: _CarteMessage(
+                  message: message,
+                  onOuvrir: () => _ouvrir(message),
+                  onSupprimer: () => _supprimer(message),
+                  suppressionEnCours:
+                      _suppressionsEnCours.contains(message.id),
+                ),
               ),
               const SizedBox(height: 10),
             ],
@@ -119,6 +141,14 @@ class _MessagerieScreenState extends State<MessagerieScreen> {
       ),
     );
   }
+
+  /// Identifiants dont la suppression est partie et n'est pas revenue.
+  ///
+  /// Rien n'empêchait de retaper la corbeille pendant l'appel : le second
+  /// DELETE trouvait le message déjà retiré et son refus venait effacer le
+  /// « Message supprimé » du premier. Sur un réseau lent — celui de nos
+  /// utilisateurs — la double tape est la règle, pas l'exception.
+  final Set<String> _suppressionsEnCours = <String>{};
 
   Future<void> _ouvrir(Fiche message) async {
     // Le marquage part sans être attendu : l'ouverture du fil ne doit pas
@@ -163,7 +193,14 @@ class _MessagerieScreenState extends State<MessagerieScreen> {
   /// Demande confirmation puis retire le message de la boîte. La garde
   /// serveur n'autorise que l'expéditeur, le destinataire ou le titulaire
   /// de la boîte étudiante — tout autre compte reçoit un refus.
-  Future<void> _supprimer(Fiche message) async {
+  /// Confirme puis supprime. Ne retire RIEN de la liste : c'est l'appelant
+  /// qui le fait, une fois l'animation de balayage terminée — retirer ici
+  /// arracherait de l'arbre un `Dismissible` encore en train de s'effacer.
+  ///
+  /// @return vrai si le serveur a bien supprimé.
+  Future<bool> _confirmerEtSupprimer(Fiche message) async {
+    if (_suppressionsEnCours.contains(message.id)) return false;
+
     final confirme = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -190,22 +227,36 @@ class _MessagerieScreenState extends State<MessagerieScreen> {
         ],
       ),
     );
-    if (confirme != true || !mounted) return;
+    if (confirme != true || !mounted) return false;
 
+    setState(() => _suppressionsEnCours.add(message.id));
     try {
       await context.read<CommunService>().supprimerMessage(message.id);
-      if (!mounted) return;
+      if (!mounted) return true;
       setState(() {
-        _messages.removeWhere((m) => m.id == message.id);
         _message = 'Message supprimé.';
         _messageSucces = true;
       });
+      return true;
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted) return false;
       setState(() {
         _message = e is ApiException ? e.message : e.toString();
         _messageSucces = false;
       });
+      return false;
+    } finally {
+      if (mounted) {
+        setState(() => _suppressionsEnCours.remove(message.id));
+      }
+    }
+  }
+
+  /// Supprime depuis la corbeille de la carte ou depuis le message ouvert :
+  /// aucune animation de balayage en cours, la ligne peut partir tout de suite.
+  Future<void> _supprimer(Fiche message) async {
+    if (await _confirmerEtSupprimer(message) && mounted) {
+      setState(() => _messages.removeWhere((m) => m.id == message.id));
     }
   }
 
@@ -252,10 +303,15 @@ class _CarteMessage extends StatelessWidget {
   final VoidCallback onOuvrir;
   final VoidCallback onSupprimer;
 
+  /// La suppression est partie et n'est pas revenue : le bouton devient un
+  /// témoin d'attente et cesse de répondre.
+  final bool suppressionEnCours;
+
   const _CarteMessage({
     required this.message,
     required this.onOuvrir,
     required this.onSupprimer,
+    this.suppressionEnCours = false,
   });
 
   @override
@@ -304,17 +360,33 @@ class _CarteMessage extends StatelessWidget {
               ),
               // Suppression : un geste secondaire, mais toujours à portée —
               // l'étudiant ne doit pas ouvrir le message pour faire le ménage.
+              //
+              // 44 px, pas 32 : la cible était plus petite que le minimum
+              // tactile, collée à la date, sur une carte dont la moindre tape
+              // à côté ouvre le message. Se tromper de cible coûte cher quand
+              // l'action d'à côté est irréversible.
               SizedBox(
-                width: 32,
-                height: 32,
-                child: IconButton(
-                  padding: EdgeInsets.zero,
-                  iconSize: 18,
-                  tooltip: 'Supprimer',
-                  color: Theme.of(context).colorScheme.error,
-                  icon: const Icon(Icons.delete_outline_rounded),
-                  onPressed: onSupprimer,
-                ),
+                width: 44,
+                height: 44,
+                child: suppressionEnCours
+                    ? Center(
+                        child: SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ),
+                      )
+                    : IconButton(
+                        padding: EdgeInsets.zero,
+                        iconSize: 20,
+                        tooltip: 'Supprimer',
+                        color: Theme.of(context).colorScheme.error,
+                        icon: const Icon(Icons.delete_outline_rounded),
+                        onPressed: onSupprimer,
+                      ),
               ),
             ],
           ),
