@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../../../core/errors/api_exception.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/utils/export_liste.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../data/services/appel_api.dart';
 import '../../../../data/services/commun_service.dart';
@@ -188,6 +189,15 @@ class _MesCoursProfesseurScreenState extends State<MesCoursProfesseurScreen> {
     }
   }
 
+  String? _sousTitreExport() {
+    final parts = <String>[
+      if (_filtreNiveau != null) 'Niveau $_filtreNiveau',
+      if (_filtreStatut != null) 'Statut $_filtreStatut',
+      if (_recherche.isNotEmpty) 'Recherche « $_recherche »',
+    ];
+    return parts.isEmpty ? null : parts.join(' · ');
+  }
+
   @override
   Widget build(BuildContext context) {
     final niveaux = _cours
@@ -212,6 +222,37 @@ class _MesCoursProfesseurScreenState extends State<MesCoursProfesseurScreen> {
       titre: 'Mes cours',
       sousTitre: '${_cours.length} cours attribué${_cours.length > 1 ? 's' : ''}',
       onRafraichir: _charger,
+      actions: [
+        BoutonExportListe(
+          titre: 'Mes cours',
+          sousTitre: _sousTitreExport(),
+          colonnes: [
+            ColonneExport(
+                libelle: 'Code', valeur: (l) => '${l['code'] ?? ''}'),
+            ColonneExport(
+                libelle: 'Cours', valeur: (l) => '${l['titre'] ?? ''}'),
+            ColonneExport(
+                libelle: 'Niveau', valeur: (l) => '${l['niveau'] ?? ''}'),
+            ColonneExport(
+                libelle: 'Promotion',
+                valeur: (l) => '${l['promotionLibelle'] ?? l['promotion'] ?? ''}'),
+            ColonneExport(
+                libelle: 'Crédits',
+                valeur: (l) => '${l['credits'] ?? ''}',
+                aDroite: true),
+            ColonneExport(
+                libelle: 'Étudiants',
+                valeur: (l) => '${l['nbEtudiants'] ?? ''}',
+                aDroite: true),
+            ColonneExport(
+                libelle: 'Statut', valeur: (l) => '${l['statut'] ?? ''}'),
+          ],
+          // La liste TELLE QU'ELLE EST FILTREE : c'est ce que l'enseignant a
+          // sous les yeux qu'il veut sur papier.
+          lignes: _filtres.map((c) => c.donnees).toList(),
+          compact: true,
+        ),
+      ],
       corps: EtatRequete(
         chargement: _chargement,
         erreur: _erreur,

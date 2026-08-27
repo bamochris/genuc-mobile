@@ -6,6 +6,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../../../core/errors/api_exception.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/utils/export_liste.dart';
 import '../../../../core/utils/formatters.dart';
 import '../../../../core/utils/presence_contexte.dart';
 import '../../../../core/utils/responsive.dart';
@@ -150,6 +151,15 @@ class _SmartPresenceProfesseurScreenState
     }
   }
 
+  /// « PRESENT » sur une feuille officielle se lit mal : on écrit « Présent ».
+  static String _libellePointage(String code) => switch (code) {
+        'PRESENT' => 'Présent',
+        'RETARD' => 'Retard',
+        'ABSENT' => 'Absent',
+        'REFUSE' => 'Refusé',
+        _ => code,
+      };
+
   @override
   Widget build(BuildContext context) {
     final session = _session;
@@ -159,6 +169,52 @@ class _SmartPresenceProfesseurScreenState
       sousTitre: session?.coursTitre ?? 'Séance à double preuve',
       onRafraichir: _charger,
       actions: [
+        // La feuille de presence signee : ce que le professeur depose au
+        // secretariat. Sans elle, la seance ne laissait de trace qu'a l'ecran.
+        if (_pointages.isNotEmpty)
+          BoutonExportListe(
+            titre: 'Feuille de présence',
+            sousTitre: [
+              session?.coursTitre,
+              session?.promotionLibelle,
+              session?.salleNom,
+              if (session?.dateDebut != null)
+                formatDate(session!.dateDebut, avecHeure: true),
+            ].whereType<String>().where((v) => v.isNotEmpty).join(' · '),
+            colonnes: [
+              ColonneExport(
+                libelle: 'Nom et prénom',
+                valeur: (l) => '${l['nom'] ?? ''}',
+              ),
+              ColonneExport(
+                  libelle: 'Statut', valeur: (l) => '${l['statut'] ?? ''}'),
+              ColonneExport(
+                  libelle: 'Vérifié à', valeur: (l) => '${l['verifieA'] ?? ''}'),
+              ColonneExport(
+                  libelle: 'Méthode', valeur: (l) => '${l['methode'] ?? ''}'),
+              ColonneExport(
+                  libelle: 'À vérifier',
+                  valeur: (l) => l['aVerifier'] == true
+                      ? '${l['motif'] ?? 'oui'}'
+                      : ''),
+            ],
+            lignes: [
+              for (final p in _pointages)
+                <String, dynamic>{
+                  'nom': [p.etudiantPrenom, p.etudiantNom]
+                      .where((v) => v.isNotEmpty)
+                      .join(' '),
+                  'statut': _libellePointage(p.statut),
+                  'verifieA': p.verifieA == null
+                      ? ''
+                      : formatDate(p.verifieA, avecHeure: true),
+                  'methode': p.methodeVerification ?? '',
+                  'aVerifier': p.verificationRequise,
+                  'motif': p.motifVerification ?? '',
+                },
+            ],
+            compact: true,
+          ),
         if (session != null && session.statut == 'ACTIVE')
           IconButton(
             icon: const Icon(Icons.stop_circle_rounded),

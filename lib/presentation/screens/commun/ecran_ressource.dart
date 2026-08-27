@@ -58,12 +58,22 @@ class EcranRessource extends StatefulWidget {
   /// Actions supplémentaires proposées sur chaque fiche.
   final List<ActionFiche> actions;
 
-  /// Colonnes de l'export papier. Nulles : pas de bouton d'impression.
+  /// Colonnes de l'export papier, quand la forme imprimée doit différer de
+  /// l'affichage.
   ///
-  /// L'export n'est pas deduit de [description] : ce qu'on lit a l'ecran et
-  /// ce qu'on veut sur papier ne coincident pas. Une liste d'appel veut le
-  /// matricule et le nom, pas la pastille de statut ni l'icone.
+  /// Nulle, l'export est **déduit de [description]** : c'est ce que l'écran
+  /// montre qui part sur le papier, colonne par colonne. Toute liste bâtie
+  /// sur ce gabarit est donc imprimable sans rien déclarer — et le jour où
+  /// l'affichage change, l'export suit, sans qu'on ait à y penser.
+  ///
+  /// À renseigner quand le papier veut autre chose : une liste d'appel veut
+  /// le matricule et le nom en colonnes séparées, là où l'écran les réunit
+  /// en un titre.
   final List<ColonneExport>? colonnesExport;
+
+  /// Retire le bouton d'impression. Pour les rares listes qui n'ont pas de
+  /// sens sur papier.
+  final bool exportable;
 
   final String messageVide;
   final bool recherche;
@@ -86,6 +96,7 @@ class EcranRessource extends StatefulWidget {
     this.onOuvrir,
     this.actions = const [],
     this.colonnesExport,
+    this.exportable = true,
     this.messageVide = 'Aucun élément à afficher.',
     this.recherche = true,
     this.entete,
@@ -163,6 +174,57 @@ class _EcranRessourceState extends State<EcranRessource> {
     }).toList();
   }
 
+  /// Colonnes de l'export : celles déclarées, sinon celles que l'écran affiche.
+  ///
+  /// Les libellés des détails sont pris sur la PREMIÈRE fiche : ils sont bâtis
+  /// à partir d'une liste fixe dans chaque écran, donc identiques d'une fiche
+  /// à l'autre. Les valeurs, elles, sont relues fiche par fiche — et par
+  /// position, puisque c'est l'ordre qui fait correspondre une valeur à sa
+  /// colonne.
+  List<ColonneExport>? get _colonnes {
+    if (!widget.exportable) return null;
+    if (widget.colonnesExport != null) return widget.colonnesExport;
+
+    final fiches = _filtrees;
+    if (fiches.isEmpty) return const [];
+
+    final description = widget.description;
+    final colonnes = <ColonneExport>[
+      ColonneExport(
+        libelle: 'Désignation',
+        valeur: (l) => description.titre(Fiche(l)),
+      ),
+    ];
+
+    if (description.sousTitre != null) {
+      colonnes.add(ColonneExport(
+        libelle: 'Référence',
+        valeur: (l) => description.sousTitre!(Fiche(l)) ?? '',
+      ));
+    }
+
+    final details = description.details?.call(fiches.first) ?? const [];
+    for (var i = 0; i < details.length; i++) {
+      final position = i;
+      colonnes.add(ColonneExport(
+        libelle: details[position].libelle,
+        valeur: (l) {
+          final lignes = description.details?.call(Fiche(l)) ?? const [];
+          return position < lignes.length ? lignes[position].valeur : '';
+        },
+      ));
+    }
+
+    if (description.statut != null) {
+      colonnes.add(ColonneExport(
+        libelle: 'Statut',
+        valeur: (l) => description.statut!(Fiche(l))?.$1 ?? '',
+      ));
+    }
+
+    return colonnes;
+  }
+
   @override
   Widget build(BuildContext context) {
     final peutCreer = widget.onCreer != null && widget.champsCreation.isNotEmpty;
@@ -173,13 +235,13 @@ class _EcranRessourceState extends State<EcranRessource> {
       onRafraichir: _charger,
       // L'export porte la liste TELLE QU'ELLE EST FILTREE : c'est ce que
       // l'utilisateur a sous les yeux qu'il veut sur papier.
-      actions: widget.colonnesExport == null
+      actions: _colonnes == null
           ? const []
           : [
               BoutonExportListe(
                 titre: widget.titre,
                 sousTitre: widget.sousTitre,
-                colonnes: widget.colonnesExport!,
+                colonnes: _colonnes!,
                 lignes: _filtrees.map((f) => f.donnees).toList(),
                 compact: true,
               ),
