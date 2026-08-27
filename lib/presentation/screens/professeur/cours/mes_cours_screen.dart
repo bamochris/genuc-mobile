@@ -417,9 +417,9 @@ class _CarteCours extends StatelessWidget {
             // Le nom du cours est CE qu'on cherche dans la carte : il passe
             // devant la pastille de niveau et le code, qui ne servent qu'a
             // trancher entre deux homonymes.
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontSize: 19,
-                  height: 1.25,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontSize: 22,
+                  height: 1.2,
                   fontWeight: FontWeight.w900,
                 ),
           ),
@@ -453,7 +453,13 @@ class _CarteCours extends StatelessWidget {
               ),
               _Meta(
                 icone: Icons.schedule_rounded,
-                texte: '${cours.entier('heures')} h',
+                // Le volume DECLARE au programme prime : c'est le chiffre du
+                // syllabus. A defaut, celui deduit des creneaux, qui est
+                // hebdomadaire — l'unite est ecrite pour ne pas confondre
+                // « 60 h sur l'annee » et « 4 h par semaine ».
+                texte: cours.entier('volumeHoraireAnnuel') > 0
+                    ? '${cours.entier('volumeHoraireAnnuel')} h/an'
+                    : '${cours.entier('heures')} h/sem',
                 couleur: teinteNiveau,
               ),
               // Un meme cours peut etre donne a plusieurs promotions ET
