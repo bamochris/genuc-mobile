@@ -95,6 +95,6 @@ class CacheTTL {
   static const Duration notifications = Duration(minutes: 2);
   static const Duration profil = Duration(hours: 1);
   static const Duration situationFinanciere = Duration(minutes: 5);
-  static const Duration Referentiel = Duration(hours: 6);
+  static const Duration referentiel = Duration(hours: 6);
   static const Duration notificationsCount = Duration(seconds: 30);
 }
