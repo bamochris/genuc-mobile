@@ -150,6 +150,61 @@ void main() {
     expect(find.text('L2'), findsWidgets);
   });
 
+  testWidgets('demander la filière déjà suivie est refusé', (tester) async {
+    await monter(tester);
+
+    // « Droit privé » est la filière de l'inscription. Le serveur ne recoupe
+    // JAMAIS la destination avec l'origine : `verifierCoherenceDestination` ne
+    // vérifie que la hiérarchie interne de la destination. Cette demande
+    // traverserait donc tout le circuit — quitus, examen à destination,
+    // équivalences — pour aboutir à une décision sur une demande qui ne
+    // demande rien.
+    await tester.tap(find.text('Filière d\'accueil *').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Droit privé').last);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    await tester.tap(find.text('Promotion d\'accueil *').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('L3').last);
+    // `pumpAndSettle` et non `pump` : le menu déroulant se referme par une
+    // animation, et tant qu'il est ouvert son propre ListView coexiste avec
+    // celui de la page — le défilement ne saurait alors plus lequel viser.
+    await tester.pumpAndSettle();
+
+    // On défile AVANT de saisir : le champ « Motif » est en bas d'un ListView,
+    // et tant qu'il n'est pas construit, `TextFormField.last` désigne « Année
+    // d'accueil ». On remplissait alors l'année et on laissait le motif vide —
+    // la validation de forme s'arrêtait là, et la règle de cohérence qu'on
+    // veut éprouver n'était jamais atteinte.
+    final bouton = find.text('Enregistrer le brouillon');
+    await tester.dragUntilVisible(
+      bouton,
+      find.byType(ListView).first,
+      const Offset(0, -260),
+    );
+    await tester.pump();
+
+    await tester.enterText(
+      find.byType(TextFormField).last,
+      'Rapprochement familial',
+    );
+    await tester.pump();
+
+    await tester.tap(bouton);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    // Le bandeau se pose EN TÊTE de la liste, donc hors écran après le
+    // défilement : un widget non construit reste introuvable, si présent
+    // soit-il dans l'état.
+    await tester.drag(find.byType(ListView).first, const Offset(0, 1200));
+    await tester.pump();
+
+    expect(find.textContaining('Vous suivez déjà cette filière'), findsOneWidget);
+  });
+
   testWidgets('sans inscription active, le dépôt est refusé d\'entrée',
       (tester) async {
     tester.view.physicalSize = const Size(390 * 3, 900 * 3);
@@ -237,6 +292,12 @@ class _ServeurCanne implements HttpClientAdapter {
       return _json([
         {'id': 21, 'libelle': 'L1'},
         {'id': 22, 'libelle': 'L2'},
+      ]);
+    }
+    if (chemin == '/api/promotions/filiere/4') {
+      return _json([
+        {'id': 8, 'libelle': 'L1'},
+        {'id': 12, 'libelle': 'L3'},
       ]);
     }
     return ResponseBody.fromString('{"erreur":"inconnu"}', 404);

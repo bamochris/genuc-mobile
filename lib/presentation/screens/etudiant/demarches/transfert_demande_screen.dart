@@ -200,8 +200,46 @@ class _TransfertDemandeScreenState extends State<TransfertDemandeScreen> {
     }
   }
 
+  /// Incohérences que le serveur ne rattrape pas, et qu'il ne peut pas
+  /// rattraper.
+  ///
+  /// `verifierCoherenceDestination` ne recoupe que la hiérarchie interne de la
+  /// destination — département sous université, filière sous département,
+  /// promotion sous filière. Il ne compare jamais la destination à l'ORIGINE,
+  /// ni au type déclaré : rien côté serveur n'empêche donc un transfert
+  /// « inter-universitaire » vers son propre établissement, ni un changement de
+  /// filière vers la filière qu'on suit déjà. Les deux passeraient tout le
+  /// circuit — quitus, examen à destination, équivalences — pour aboutir à une
+  /// décision sur une demande qui ne demande rien.
+  String? _incoherence() {
+    final origineUniversite = _dossier?.texte('universiteId');
+    final origineFiliere = _dossier?.texte('filiereId');
+
+    if (_type == 'INTER_UNIVERSITAIRE' &&
+        _universiteDestination == origineUniversite) {
+      return 'Un transfert inter-universitaire va vers un AUTRE établissement. '
+          'Pour changer de filière chez vous, choisissez « Inter-filière ».';
+    }
+    if (_type == 'INTER_FILIERE' &&
+        _filiereDestination != null &&
+        _filiereDestination == origineFiliere) {
+      return 'Vous suivez déjà cette filière : choisissez celle vers laquelle '
+          'vous souhaitez aller.';
+    }
+    return null;
+  }
+
   Future<void> _deposer() async {
     if (!(_cleFormulaire.currentState?.validate() ?? false)) return;
+
+    final incoherence = _incoherence();
+    if (incoherence != null) {
+      setState(() {
+        _message = incoherence;
+        _messageSucces = false;
+      });
+      return;
+    }
 
     final dossier = _dossier;
     final inscriptionId = context.read<AuthProvider>().user?.inscriptionId;
