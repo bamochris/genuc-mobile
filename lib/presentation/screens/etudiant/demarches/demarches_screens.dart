@@ -102,6 +102,31 @@ String libelleTypeTransfert(String code) => switch (code.toUpperCase()) {
       _ => code.replaceAll('_', ' '),
     };
 
+/// Titre d'une demande de transfert dans la liste de suivi.
+///
+/// Le titre ne portait que l'établissement d'accueil. Depuis que le dépôt
+/// exige la cascade complète (établissement → filière → promotion), deux
+/// demandes vers le même établissement — le cas COURANT, puisqu'un
+/// inter-filière n'en change pas — s'affichaient à l'identique : la liste ne
+/// les distinguait plus. C'est la filière qui les sépare, elle passe devant.
+///
+/// Le serveur n'impose aucun des deux champs : `verifierCoherenceDestination`
+/// ne vérifie que leur cohérence entre eux, afin que les dossiers anciens
+/// restent relisibles. Chaque niveau peut donc manquer, et le titre se replie.
+String titreTransfert(Fiche f) {
+  final filiere = f.texte('filiereDestinationNom');
+  final etablissement = f.texte(
+    'universiteDestinationNom',
+    alias: const ['universiteDestination', 'destination'],
+  );
+  if (filiere.isNotEmpty && etablissement.isNotEmpty) {
+    return '$filiere — $etablissement';
+  }
+  if (filiere.isNotEmpty) return filiere;
+  if (etablissement.isNotEmpty) return etablissement;
+  return 'Demande de transfert';
+}
+
 /// Les deux seuls types qu'un étudiant peut introduire lui-même.
 ///
 /// Réorientation, réintégration et suspension existent aussi côté serveur mais
@@ -442,15 +467,7 @@ class TransfertScreen extends StatelessWidget {
       charger: service.mesTransferts,
       description: DescriptionFiche(
         icone: Icons.swap_horiz_rounded,
-        titre: (f) => f.texte(
-          'universiteDestinationNom',
-          alias: const [
-            'filiereDestinationNom',
-            'universiteDestination',
-            'destination',
-          ],
-          defaut: 'Demande de transfert',
-        ),
+        titre: titreTransfert,
         // `TransfertDemandeDTO` nomme ce champ `numeroDemande`. On lisait
         // `numeroTransfert`, qui n'existe nulle part : la référence du dossier
         // — la seule chose que le secrétariat demande au guichet — n'a jamais
@@ -462,6 +479,14 @@ class TransfertScreen extends StatelessWidget {
             libelle: 'Type',
             valeur: libelleTypeTransfert(f.texte('typeTransfert')),
           ),
+          // Troisième niveau de la cascade : le titre porte les deux premiers,
+          // la promotion d'accueil n'avait nulle part où s'afficher alors
+          // qu'elle est exigée au dépôt.
+          if (f.texte('promotionDestinationLibelle').isNotEmpty)
+            LigneDetail(
+              libelle: 'Promotion d\'accueil',
+              valeur: f.texte('promotionDestinationLibelle'),
+            ),
           LigneDetail(
             libelle: 'Introduite le',
             valeur: formatDate(

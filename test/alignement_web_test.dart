@@ -102,6 +102,64 @@ void main() {
     });
   });
 
+  group('Transferts — titre de la liste de suivi', () {
+    test('la filière d\'accueil passe devant l\'établissement', () {
+      // Le titre ne portait que l'établissement. Un inter-filière n'en change
+      // pas : toutes les demandes de ce type — le cas courant — s'affichaient
+      // sous le nom du même établissement, indiscernables les unes des autres.
+      expect(
+        titreTransfert(Fiche.depuis(const {
+          'filiereDestinationNom': 'Sciences économiques',
+          'universiteDestinationNom': 'Université de Kinshasa',
+        })),
+        'Sciences économiques — Université de Kinshasa',
+      );
+    });
+
+    test('deux demandes vers le même établissement se distinguent', () {
+      const etablissement = 'Université de Kinshasa';
+      String titre(String filiere) => titreTransfert(Fiche.depuis({
+            'filiereDestinationNom': filiere,
+            'universiteDestinationNom': etablissement,
+          }));
+      expect(titre('Droit privé'), isNot(titre('Sciences économiques')));
+    });
+
+    test('chaque niveau absent fait replier le titre, jamais échouer', () {
+      // `verifierCoherenceDestination` ne vérifie que la cohérence des niveaux
+      // ENTRE EUX : le serveur accepte qu'ils soient nuls pour rester capable
+      // de relire les dossiers antérieurs à la cascade.
+      expect(
+        titreTransfert(Fiche.depuis(const {
+          'universiteDestinationNom': 'Université de Lubumbashi',
+        })),
+        'Université de Lubumbashi',
+      );
+      expect(
+        titreTransfert(Fiche.depuis(const {
+          'filiereDestinationNom': 'Droit privé',
+        })),
+        'Droit privé',
+      );
+      expect(
+        titreTransfert(Fiche.depuis(const {'id': 9})),
+        'Demande de transfert',
+      );
+    });
+
+    test('un champ nul ou « null » ne devient pas le titre', () {
+      // Jackson omet les champs nuls, mais les charges utiles relayées par
+      // d'autres couches les rendent parfois explicitement.
+      expect(
+        titreTransfert(Fiche.depuis(const {
+          'filiereDestinationNom': null,
+          'universiteDestinationNom': 'null',
+        })),
+        'Demande de transfert',
+      );
+    });
+  });
+
   group('Transferts — le type inter-vacation est fermé', () {
     test('il n\'est plus proposé à la création', () {
       // Le serveur le refuse désormais (« TYPE_FERME ») et c'était la valeur
