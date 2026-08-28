@@ -247,26 +247,50 @@ abstract class ServiceApi {
     );
   }
 
-  /// Les routes récentes répondent `ApiResponse{success, data}` tandis que les
-  /// anciennes rendent l'objet nu : les deux formes coexistent dans le backend
-  /// (voir `dto/ApiResponse.java`).
-  static dynamic _deballer(dynamic donnees) {
-    if (donnees is Map && donnees.containsKey('data') && donnees.length <= 4) {
-      final interne = donnees['data'];
-      if (interne is Map || interne is List) return interne;
-    }
-    return donnees;
-  }
+  static dynamic _deballer(dynamic donnees) => deballerReponse(donnees);
 
-  static List<Fiche> _extraireListe(dynamic donnees) {
-    final utile = _deballer(donnees);
-    if (utile is List) return utile.map(Fiche.depuis).toList();
-    if (utile is Map) {
-      for (final cle in ['content', 'items', 'resultats', 'liste']) {
-        final v = utile[cle];
-        if (v is List) return v.map(Fiche.depuis).toList();
-      }
-    }
-    return const [];
+  static List<Fiche> _extraireListe(dynamic donnees) => extraireListe(donnees);
+}
+
+/// Retire l'enveloppe `ApiResponse` d'une réponse, si elle en porte une.
+///
+/// Les routes récentes répondent `ApiResponse{success, status, data, …}` tandis
+/// que les anciennes rendent l'objet nu : les deux formes coexistent dans le
+/// backend (voir `dto/ApiResponse.java`).
+///
+/// Le seuil de quatre clés est une PRÉCAUTION, pas une définition : il évite de
+/// déballer un objet métier qui porterait par hasard un champ `data`. Mais
+/// `ApiResponse` omet ses champs nuls, et en porte donc quatre (`success`,
+/// `status`, `data`, `timestamp`) — CINQ dès qu'il y a un `message`, ce que
+/// fait toute réponse de création (« Demande de transfert créée »). Ces
+/// réponses-là n'étaient pas déballées : l'appelant recevait l'enveloppe, où
+/// `id` n'existe pas, et lisait donc un objet vide sans la moindre erreur.
+///
+/// `success` tranche sans ambiguïté : aucune réponse métier ne porte à la fois
+/// `data` et `success`. Le seuil reste en second recours pour les enveloppes
+/// bricolées à la main (`Map.of("data", …)`), qui ne portent pas toujours
+/// `success`.
+dynamic deballerReponse(dynamic donnees) {
+  if (donnees is Map &&
+      donnees.containsKey('data') &&
+      (donnees.containsKey('success') || donnees.length <= 4)) {
+    final interne = donnees['data'];
+    if (interne is Map || interne is List) return interne;
   }
+  return donnees;
+}
+
+/// Liste de fiches, quelle que soit la forme de la réponse : tableau nu,
+/// enveloppe `ApiResponse`, page Spring (`content`) — ou les deux imbriquées,
+/// ce que rend `/api/transfert/demandes/mon-dossier`.
+List<Fiche> extraireListe(dynamic donnees) {
+  final utile = deballerReponse(donnees);
+  if (utile is List) return utile.map(Fiche.depuis).toList();
+  if (utile is Map) {
+    for (final cle in ['content', 'items', 'resultats', 'liste']) {
+      final v = utile[cle];
+      if (v is List) return v.map(Fiche.depuis).toList();
+    }
+  }
+  return const [];
 }

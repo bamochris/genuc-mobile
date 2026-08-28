@@ -125,6 +125,20 @@ class SeanceProfesseur {
   final int nbEtudiants;
   final String statut;
 
+  /// `S1`, `S2`, `ANNUEL` — ou nul : le créneau ne déclare pas de semestre.
+  ///
+  /// Nul est le cas de toutes les grilles antérieures à la V66 : on n'affiche
+  /// alors aucune étiquette, plutôt que d'affirmer « Annuel » par défaut.
+  final String? semestre;
+
+  /// Promotion et vacation du créneau.
+  ///
+  /// « L1 Droit Jour » et « L1 Droit Soir » se donnent au même créneau, dans
+  /// deux salles, devant deux cohortes : sans elles, la semaine affichait deux
+  /// lignes qu'aucun œil ne pouvait départager.
+  final String? promotionLibelle;
+  final String? vacationNom;
+
   SeanceProfesseur({
     required this.id,
     required this.titre,
@@ -134,6 +148,9 @@ class SeanceProfesseur {
     required this.salle,
     required this.nbEtudiants,
     required this.statut,
+    this.semestre,
+    this.promotionLibelle,
+    this.vacationNom,
   });
 
   factory SeanceProfesseur.fromJson(Map<String, dynamic> json) {
@@ -146,8 +163,23 @@ class SeanceProfesseur {
       salle: json['salle'] ?? '',
       nbEtudiants: (json['nbEtudiants'] ?? 0).toInt(),
       statut: json['statut'] ?? 'upcoming',
+      semestre: json['semestre'],
+      promotionLibelle: json['promotionLibelle'],
+      vacationNom: json['vacationNom'],
     );
   }
+
+  /// Étiquette courte du semestre, ou nul s'il n'est pas déclaré.
+  String? get libelleSemestre => switch (semestre) {
+        'S1' => 'S1',
+        'S2' => 'S2',
+        'ANNUEL' => 'Annuel',
+        _ => null,
+      };
+
+  /// « L1 · Jour », ou ce qui est connu des deux.
+  String get libelleClasse =>
+      [promotionLibelle, vacationNom].where((v) => v != null && v.isNotEmpty).join(' · ');
 
   bool get estTermine => statut == 'done';
   bool get estEnCours => statut == 'active';

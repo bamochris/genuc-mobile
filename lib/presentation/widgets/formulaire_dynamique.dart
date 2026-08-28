@@ -191,7 +191,15 @@ class _DialogueFormulaireState extends State<DialogueFormulaire> {
               ? _valeurs[champ.cle].toString()
               : null,
           isExpanded: true,
-          decoration: InputDecoration(labelText: libelle),
+          // `helperText` et non `hintText` : un menu déroulant affiche déjà sa
+          // sélection à la place du texte d'invite, qui ne se voit donc jamais.
+          // L'indice était accepté par `ChampFormulaire` et transporté par
+          // `EcranRessource._champsResolus`, mais silencieusement perdu ici —
+          // une consigne écrite qui ne s'affichait nulle part.
+          decoration: InputDecoration(
+            labelText: libelle,
+            helperText: champ.indice,
+          ),
           items: champ.options.entries
               .map((e) => DropdownMenuItem(
                     value: e.key,

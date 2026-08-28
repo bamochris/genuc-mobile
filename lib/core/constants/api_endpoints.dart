@@ -108,8 +108,19 @@ class ApiEndpoints {
       '/api/demandes-academiques/$demandeId/soumettre';
   // `TransfertController` est monté sur `/api/transfert` (singulier), pas
   // `/api/transferts` : les demandes vivent sous `/demandes`.
+  //
+  // Le POST de création est ouvert à l'étudiant, mais la LISTE ne l'est pas :
+  // `GET /api/transfert/demandes` porte
+  // `hasAnyRole('ADMIN_UNIVERSITE','DOYEN','CHEF_DEPARTEMENT','SECRETAIRE_ACADEMIQUE')`
+  // — un étudiant y recevait un 403, et l'écran de suivi restait donc vide
+  // quoi qu'il ait déposé. Son dossier à lui vit sous `/mon-dossier`, qui
+  // résout l'inscription depuis le jeton (aucun identifiant à passer).
   static const String transferts = '/api/transfert/demandes';
+  static const String transfertsMonDossier =
+      '/api/transfert/demandes/mon-dossier';
   static String transfertSuivi(String id) => '/api/transfert/demandes/$id';
+  static String transfertSoumettre(String id) =>
+      '/api/transfert/demandes/$id/soumettre';
 
   // ─── Attestations et documents personnels ──────────────────
   static const String attestationDemander = '/api/attestations/demander';
@@ -398,6 +409,16 @@ class ApiEndpoints {
   static String utilisateur(String id) => '/api/utilisateurs/$id';
   static String inscriptionsUniversite(String universiteId) =>
       '/api/inscriptions/universite/$universiteId';
+
+  /// Dossier d'inscription complet — la seule route qui rende `etudiantId`.
+  ///
+  /// Ni la réponse de connexion ni `GET /api/auth/moi` ne le portent : elles
+  /// s'arrêtent à `inscriptionId`. Or `POST /api/transfert/demandes` exige
+  /// `etudiantId` ET `inscriptionId`, et son garde vérifie les deux. Cette
+  /// route est ouverte à l'ÉTUDIANT sous `peutAccederInscription` : il ne lit
+  /// que la sienne.
+  static String inscription(String inscriptionId) =>
+      '/api/inscriptions/$inscriptionId';
 
   // ─── Smart Presence ────────────────────────────────────────
   // La séance de l'étudiant se cherche par sa promotion (`/sessions/mienne`),

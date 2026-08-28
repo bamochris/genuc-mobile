@@ -4,12 +4,14 @@ import 'package:provider/provider.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/fichiers.dart';
 import '../../../../core/utils/formatters.dart';
+import '../../../../data/services/appel_api.dart';
 import '../../../../data/services/commun_service.dart';
 import '../../../../data/services/etudiant_academique_service.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../widgets/formulaire_dynamique.dart';
 import '../../../widgets/portail_widgets.dart';
 import '../../commun/ecran_ressource.dart';
+import 'transfert_demande_screen.dart';
 
 /// Module « Démarches » du portail étudiant.
 ///
@@ -33,6 +35,71 @@ import '../../commun/ecran_ressource.dart';
       'ANNULEE' => ('Annulée', AppTheme.statutNavy),
       '' => null,
       _ => (code.replaceAll('_', ' '), AppTheme.statutNavy),
+    };
+
+/// Libellés de `TransfertDemande.StatutTransfert`, repris de
+/// `SECRETAIRE_ACADEMIQUE/statutsTransfert.jsx`.
+///
+/// Le circuit de transfert a SON propre jeu de statuts, sans rapport avec
+/// celui des demandes académiques : l'écran leur appliquait pourtant
+/// [statutDemande], qui n'en connaît aucun. Chaque pastille retombait donc sur
+/// le repli « code brut » et affichait « Bouche », « Soumis », « En
+/// verification origine » — le nom interne, en l'état.
+///
+/// `BOUCHE` est bien la valeur déclarée par le serveur, et son sens ne se
+/// suppose pas : `TransfertService` la pose à la création en journalisant
+/// « Demande créée en brouillon », et les deux seules opérations qu'elle
+/// autorise sont la soumission et la suppression. On affiche donc
+/// « Brouillon » — le mot que l'application emploie partout ailleurs.
+(String, Color)? statutTransfert(String code) => switch (code.toUpperCase()) {
+      'BOUCHE' => ('Brouillon', AppTheme.statutNavy),
+      'SOUMIS' => ('Soumise', AppTheme.statutOrange),
+      'EN_VERIFICATION_ORIGINE' =>
+        ('Vérification à l\'origine', AppTheme.statutBleu),
+      'QUITUS_DELIVRE' => ('Quitus délivré', AppTheme.statutVert),
+      'QUITUS_REFUSE' => ('Quitus refusé', AppTheme.statutRouge),
+      'EN_EXAMEN_DESTINATION' =>
+        ('Examen à destination', AppTheme.statutBleu),
+      'EQUIVALENCES_EN_COURS' =>
+        ('Équivalences en cours', AppTheme.statutBleu),
+      'DECISION_FINALE' => ('Décision finale', AppTheme.statutBleu),
+      'ACCEPTE' => ('Acceptée', AppTheme.statutVert),
+      'ACCEPTE_SOUS_CONDITION' =>
+        ('Acceptée sous condition', AppTheme.statutOrange),
+      'REFUSE' => ('Refusée', AppTheme.statutRouge),
+      'ESCALADE_MINISTERIELLE' =>
+        ('Escalade ministérielle', AppTheme.statutRouge),
+      'CLOTURE' => ('Clôturée', AppTheme.statutNavy),
+      '' => null,
+      _ => (code.replaceAll('_', ' '), AppTheme.statutNavy),
+    };
+
+/// Types réellement PROPOSÉS à la création.
+///
+/// « Inter-vacation » n'y figure plus, et c'était la valeur par défaut du
+/// formulaire : `TransfertDemande` n'a jamais porté ni vacation d'origine ni
+/// vacation de destination, aucun service ne traitait ce cas, et le serveur le
+/// refuse désormais à la création. Un candidat pressé envoyait une demande
+/// inexploitable sans avoir rien choisi, puis attendait une réponse qui ne
+/// pouvait pas venir.
+///
+/// Le changement de vacation se demande par les DEMANDES ACADÉMIQUES
+/// (`CHANGEMENT_VACATION`, ci-dessus), où le circuit est complet : vacation
+/// actuelle, vacation souhaitée, instruction et visa.
+const Map<String, String> typesTransfertProposes = {
+  'INTER_FILIERE': 'Inter-filière (changer de filière)',
+  'INTER_UNIVERSITAIRE': 'Inter-universitaire (changer d\'établissement)',
+};
+
+/// Libellés de TOUS les types, y compris celui qu'on ne propose plus : une
+/// demande archivée doit rester lisible, et non afficher « INTER_VACATION »
+/// brut dans l'historique.
+String libelleTypeTransfert(String code) => switch (code.toUpperCase()) {
+      'INTER_VACATION' => 'Inter-vacation',
+      'INTER_FILIERE' => 'Inter-filière',
+      'INTER_UNIVERSITAIRE' => 'Inter-universitaire',
+      '' => 'Transfert',
+      _ => code.replaceAll('_', ' '),
     };
 
 /// Les deux seuls types qu'un étudiant peut introduire lui-même.
@@ -344,17 +411,32 @@ class _NouvelleDemandeScreenState extends State<NouvelleDemandeScreen> {
 // Transfert inter-établissements
 // ─────────────────────────────────────────────────────────────
 
+/// Suivi des demandes de transfert de l'étudiant.
+///
+/// Le DÉPÔT vit dans `TransfertDemandeScreen` : la destination est une cascade
+/// (établissement → filière → promotion) que la boîte de dialogue déclarative
+/// ne sait pas enchaîner.
+///
+/// Trois défauts corrigés ici le 28/08/2026, dont aucun ne se voyait :
+///
+/// 1. La LISTE tapait `GET /api/transfert/demandes`, réservée aux rôles
+///    d'instruction : l'étudiant recevait un 403 et lisait « aucune demande »
+///    quoi qu'il ait déposé. Son dossier vit sous `/mon-dossier`.
+/// 2. Les statuts affichés étaient ceux des demandes académiques, qui ne
+///    connaissent aucun des états du circuit de transfert : chaque pastille
+///    retombait sur le nom interne, et « BOUCHE » s'affichait tel quel.
+/// 3. Une demande créée restait un BROUILLON que personne n'instruit : rien
+///    ne permettait de la SOUMETTRE.
 class TransfertScreen extends StatelessWidget {
   const TransfertScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     final service = context.read<EtudiantAcademiqueService>();
-    final commun = context.read<CommunService>();
 
     return EcranRessource(
       titre: 'Transfert',
-      sousTitre: 'Changer d\'établissement',
+      sousTitre: 'Changer de filière ou d\'établissement',
       libelleCreation: 'Demander un transfert',
       messageVide: 'Aucune demande de transfert.',
       charger: service.mesTransferts,
@@ -362,48 +444,91 @@ class TransfertScreen extends StatelessWidget {
         icone: Icons.swap_horiz_rounded,
         titre: (f) => f.texte(
           'universiteDestinationNom',
-          alias: const ['universiteDestination', 'destination'],
+          alias: const [
+            'filiereDestinationNom',
+            'universiteDestination',
+            'destination',
+          ],
           defaut: 'Demande de transfert',
         ),
-        sousTitre: (f) => f.texteOuNul('numeroTransfert', alias: const ['numero']),
-        statut: (f) => statutDemande(f.texte('statut')),
+        // `TransfertDemandeDTO` nomme ce champ `numeroDemande`. On lisait
+        // `numeroTransfert`, qui n'existe nulle part : la référence du dossier
+        // — la seule chose que le secrétariat demande au guichet — n'a jamais
+        // été affichée.
+        sousTitre: (f) => f.texteOuNul('numeroDemande'),
+        statut: (f) => statutTransfert(f.texte('statut')),
         details: (f) => [
+          LigneDetail(
+            libelle: 'Type',
+            valeur: libelleTypeTransfert(f.texte('typeTransfert')),
+          ),
           LigneDetail(
             libelle: 'Introduite le',
             valeur: formatDate(
-              f.texteOuNul('dateDemande', alias: const ['creeLe']),
+              f.texteOuNul('creeLe', alias: const ['dateDemande']),
             ),
           ),
           if (f.texte('motif').isNotEmpty)
             LigneDetail(libelle: 'Motif', valeur: f.texte('motif')),
         ],
       ),
-      optionsDynamiques: {
-        'universiteDestinationId': () async {
-          final universites = await commun.universites();
-          return {
-            for (final u in universites)
-              u.id: u.texte('nom', alias: const ['sigle'], defaut: '—'),
-          };
-        },
-      },
-      champsCreation: const [
-        ChampFormulaire(
-          cle: 'universiteDestinationId',
-          libelle: 'Établissement de destination',
-          type: TypeChamp.liste,
-          obligatoire: true,
+      actions: [
+        ActionFiche(
+          libelle: 'Soumettre',
+          icone: Icons.send_rounded,
+          couleur: AppTheme.statutVert,
+          visiblePour: _estBrouillon,
+          executer: (ctx, f) => service.soumettreTransfert(f.id),
         ),
-        ChampFormulaire(
-          cle: 'motif',
-          libelle: 'Motif du transfert',
-          type: TypeChamp.multiligne,
-          obligatoire: true,
+        ActionFiche(
+          libelle: 'Supprimer',
+          icone: Icons.delete_rounded,
+          couleur: AppTheme.error,
+          // Une demande soumise ne se retire plus : le serveur la refuse
+          // (« Seule une demande en brouillon peut être supprimée ») et
+          // n'expliquerait rien de plus qu'un « Requête invalide ».
+          visiblePour: _estBrouillon,
+          executer: (ctx, f) async {
+            final confirme = await showDialog<bool>(
+              context: ctx,
+              builder: (d) => AlertDialog(
+                title: const Text('Supprimer le brouillon'),
+                content: const Text(
+                  'Cette demande de transfert sera définitivement retirée.',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(d, false),
+                    child: const Text('Annuler'),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.pop(d, true),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppTheme.error,
+                    ),
+                    child: const Text('Supprimer'),
+                  ),
+                ],
+              ),
+            );
+            if (confirme == true) await service.supprimerTransfert(f.id);
+          },
         ),
       ],
-      onCreer: service.demanderTransfert,
+      // La saisie est confiée à un ÉCRAN, pas à la boîte de dialogue
+      // générique : la destination est une cascade — établissement, puis
+      // filière, puis promotion —, et le formulaire déclaratif résout ses
+      // options une fois pour toutes avant l'ouverture. Voir
+      // `TransfertDemandeScreen` pour ce que l'ESU exige de ces trois niveaux.
+      onNouveau: (ctx) => Navigator.of(ctx).push<String>(
+        MaterialPageRoute(builder: (_) => const TransfertDemandeScreen()),
+      ),
     );
   }
+
+  static bool _estBrouillon(Fiche f) =>
+      f.texte('statut').toUpperCase() == 'BOUCHE';
+
 }
 
 // ─────────────────────────────────────────────────────────────

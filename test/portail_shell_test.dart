@@ -52,6 +52,20 @@ void main() {
     addTearDown(tester.view.reset);
 
     final dependencies = Dependencies.creer();
+    // `CacheService` arme un `Timer.periodic` DANS SON CONSTRUCTEUR, pour
+    // purger ses entrées expirées toutes les cinq minutes. Rien ne l'arrêtait
+    // ici : le minuteur survivait à l'arbre de widgets, et `testWidgets`
+    // échouait en fin de test sur « A Timer is still pending even after the
+    // widget tree was disposed ». Les douze cas de ce fichier tombaient là,
+    // APRÈS s'être déroulés entièrement — l'échec ne disait donc rien de la
+    // navigation qu'ils vérifient.
+    //
+    // On l'arrête tout de suite, et non dans un `addTearDown` : l'invariant
+    // est vérifié à la fin du CORPS du test, avant que les tear-downs ne
+    // s'exécutent. Une purge toutes les cinq minutes n'a de toute façon aucun
+    // effet dans un test qui dure trois cents millisecondes, et le cache reste
+    // parfaitement fonctionnel une fois vidé : il rate, donc il recharge.
+    dependencies.cacheService.dispose();
     // Coupe le réseau : réponses immédiates et déterministes, aucun délai
     // d'attente à traverser dans le test.
     dependencies.dioClient.dio.httpClientAdapter = _AdaptateurHorsLigne();
@@ -334,9 +348,17 @@ void main() {
       await ouvrirTiroir(tester);
 
       await taperEtAttendre(tester, find.text('Encadrement'));
-      await taperEtAttendre(tester, find.text('Sujets TFC'));
+      // « Sujets de fin de cycle », et non « Sujets TFC » : la terminologie a
+      // été alignée sur l'ESU — le TFC est le travail de fin de PREMIER cycle,
+      // et l'écran sert aussi les mémoires de licence et de master. Le test
+      // était resté sur l'ancien libellé et ne trouvait donc plus rien à
+      // taper : c'est le seul de ce fichier qui échouait pour une raison
+      // propre à lui.
+      await taperEtAttendre(tester, find.text('Sujets de fin de cycle'));
 
-      expect(find.text('Sujets de TFC'), findsOneWidget);
+      // Le libellé se retrouve en titre d'écran ET sur la pastille active du
+      // module : on vérifie sa présence, pas son unicité.
+      expect(find.text('Sujets de fin de cycle'), findsWidgets);
       expect(find.text('Suivi TFC'), findsOneWidget); // pastille du module
     });
   });

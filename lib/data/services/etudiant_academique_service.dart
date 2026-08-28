@@ -16,8 +16,21 @@ class EtudiantAcademiqueService extends ServiceApi {
 
   // ─── Emploi du temps, présences, examens ───────────────────
 
-  Future<List<Fiche>> horaire(String inscriptionId) => listeDe(
+  /// Semaine type de l'inscription, éventuellement restreinte à un semestre.
+  ///
+  /// [semestre] vaut `S1`, `S2` ou `ANNUEL` — les valeurs de l'énumération
+  /// serveur introduite par la V66. Nul, le serveur rend toute l'année.
+  ///
+  /// Le filtre est INCLUSIF côté serveur (`Semestre.concerne`) : demander `S1`
+  /// rend les créneaux de S1, les créneaux annuels ET ceux sans semestre
+  /// déclaré. Un cours porté sur l'année figure aux deux semestres, et les
+  /// grilles antérieures à la V66 ne disparaissent de l'écran de personne.
+  Future<List<Fiche>> horaire(String inscriptionId, {String? semestre}) =>
+      listeDe(
         ApiEndpoints.etudiantHoraire(inscriptionId),
+        parametres: (semestre == null || semestre.isEmpty)
+            ? null
+            : {'semestre': semestre},
         contexte: 'Votre horaire n\'a pas pu être chargé.',
       );
 
@@ -285,13 +298,49 @@ class EtudiantAcademiqueService extends ServiceApi {
   Future<Fiche> soumettreDemande(String demandeId) =>
       poster(ApiEndpoints.demandeSoumettre(demandeId));
 
-  Future<List<Fiche>> mesTransferts() => listeDe(ApiEndpoints.transferts);
+  /// Les demandes de transfert de l'étudiant connecté.
+  ///
+  /// `/mon-dossier` et non `/demandes` : la seconde est réservée aux rôles
+  /// d'instruction et répondait 403 à tout étudiant. La réponse est une page
+  /// Spring enveloppée dans `ApiResponse` — `listeDe` déballe les deux.
+  Future<List<Fiche>> mesTransferts() => listeDe(
+        ApiEndpoints.transfertsMonDossier,
+        contexte: 'Vos demandes de transfert n\'ont pas pu être chargées.',
+      );
 
-  Future<Fiche> demanderTransfert(Map<String, dynamic> donnees) =>
-      poster(ApiEndpoints.transferts, corps: donnees);
+  Future<Fiche> demanderTransfert(Map<String, dynamic> donnees) => poster(
+        ApiEndpoints.transferts,
+        corps: donnees,
+        contexte: 'La demande de transfert n\'a pas pu être créée.',
+      );
+
+  /// Fait passer un brouillon (`BOUCHE`) à l'état `SOUMIS`.
+  ///
+  /// Sans cette étape la demande reste un brouillon que personne n'instruit :
+  /// la création ne fait que l'ouvrir — `TransfertService` journalise
+  /// « Demande créée en brouillon » et n'autorise ensuite que deux
+  /// opérations, la soumission et la suppression.
+  Future<Fiche> soumettreTransfert(String id) => poster(
+        ApiEndpoints.transfertSoumettre(id),
+        contexte: 'La demande n\'a pas pu être soumise.',
+      );
 
   Future<Fiche> suiviTransfert(String id) =>
       ficheDe(ApiEndpoints.transfertSuivi(id));
+
+  /// Retire un brouillon. Le serveur refuse toute demande déjà soumise —
+  /// « Seule une demande en brouillon peut être supprimée ».
+  Future<void> supprimerTransfert(String id) => supprimer(
+        ApiEndpoints.transfertSuivi(id),
+        contexte: 'La demande n\'a pas pu être supprimée.',
+      );
+
+  /// Dossier d'inscription complet — porte `etudiantId` et `universiteId`,
+  /// que la session ne connaît pas (cf. `ApiEndpoints.inscription`).
+  Future<Fiche> inscription(String inscriptionId) => ficheDe(
+        ApiEndpoints.inscription(inscriptionId),
+        contexte: 'Votre dossier d\'inscription n\'a pas pu être lu.',
+      );
 
   Future<List<Fiche>> equivalences(String utilisateurId) =>
       listeDe(ApiEndpoints.equivalencesEtudiant(utilisateurId));

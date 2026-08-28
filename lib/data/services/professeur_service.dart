@@ -98,11 +98,22 @@ class ProfesseurService {
   }
 
   /// Emploi du temps hebdomadaire groupé par jour.
-  /// `GET /api/professeur/planning/{professeurId}`.
-  Future<List<JourPlanning>> getPlanning(String professeurId) async {
+  /// `GET /api/professeur/planning/{professeurId}?semestre=`.
+  ///
+  /// [semestre] vaut `S1` ou `S2` ; nul, la semaine entière est rendue. Le
+  /// filtre est appliqué par le serveur et il est INCLUSIF : demander S1 rend
+  /// S1, les créneaux annuels et ceux qui ne déclarent pas de semestre. Rien
+  /// de ce qui existe ne disparaît de l'écran.
+  Future<List<JourPlanning>> getPlanning(
+    String professeurId, {
+    String? semestre,
+  }) async {
     try {
       final response = await _dio.get(
         ApiEndpoints.professeurPlanning(professeurId),
+        queryParameters: (semestre == null || semestre.isEmpty)
+            ? null
+            : {'semestre': semestre},
       );
       if (response.statusCode == 200) {
         final List<dynamic> data = response.data;

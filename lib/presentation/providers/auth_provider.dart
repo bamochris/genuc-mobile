@@ -22,6 +22,19 @@ class AuthProvider extends ChangeNotifier {
   String? get error => _error;
   bool get isAuthenticated => _user != null;
 
+  /// Pose la session sans passer par le réseau. **Réservé aux tests.**
+  ///
+  /// Les écrans lisent l'utilisateur ici — `inscriptionId` surtout, dont
+  /// dépendent presque toutes les routes du portail étudiant. Les monter dans
+  /// un test exigeait sinon de simuler une connexion complète, jetons et
+  /// stockage sécurisé compris, pour vérifier un formulaire. Même intention
+  /// que `DioClient.reset()`, déjà exposé de la sorte.
+  @visibleForTesting
+  void definirUtilisateurPourTest(User? utilisateur) {
+    _user = utilisateur;
+    _sessionRestauree = true;
+  }
+
   /// Faux tant que la restauration de session au démarrage n'a pas abouti.
   /// À distinguer de [isLoading], vrai aussi pendant une connexion : sans
   /// cette distinction, appuyer sur « Se connecter » renvoyait l'utilisateur

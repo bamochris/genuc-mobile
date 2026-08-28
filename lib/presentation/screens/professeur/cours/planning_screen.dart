@@ -26,6 +26,19 @@ class PlanningCoursScreen extends StatefulWidget {
   State<PlanningCoursScreen> createState() => _PlanningCoursScreenState();
 }
 
+/// Choix du sélecteur, alignés sur ceux de l'emploi du temps étudiant et de
+/// `admin/GestionHoraires.jsx`.
+///
+/// `ANNUEL` n'est pas proposé : le demander ne rendrait que les cours portés
+/// sur l'année, c'est-à-dire une grille amputée de tout le reste. La valeur
+/// existe bien côté serveur, et un créneau annuel figure dans les deux
+/// semestres — c'est le filtre qui n'aurait pas de sens, pas la donnée.
+const Map<String, String> _semestres = {
+  '': 'Toute l’année',
+  'S1': 'Premier semestre',
+  'S2': 'Second semestre',
+};
+
 class _PlanningCoursScreenState extends State<PlanningCoursScreen> {
   static const Map<String, String> _jours = {
     'MONDAY': 'Lundi',
@@ -40,6 +53,16 @@ class _PlanningCoursScreenState extends State<PlanningCoursScreen> {
   bool _chargement = true;
   String? _erreur;
 
+  /// Semestre demandé au serveur. Vide = l'année entière.
+  ///
+  /// Aucun défaut n'est posé, et c'est délibéré : rien dans le référentiel ne
+  /// déclare le semestre EN COURS — ni `annee_academique`, qui ne porte que le
+  /// libellé et l'indicateur `active`, ni le calendrier académique, dont les
+  /// types vont de la rentrée aux délibérations sans découpage semestriel. Le
+  /// déduire de la date du jour masquerait des séances réelles sur une règle
+  /// que personne n'a déclarée.
+  String _semestre = '';
+
   @override
   void initState() {
     super.initState();
@@ -53,8 +76,9 @@ class _PlanningCoursScreenState extends State<PlanningCoursScreen> {
       _erreur = null;
     });
     try {
-      final planning =
-          await context.read<ProfesseurService>().getPlanning(professeurId);
+      final planning = await context
+          .read<ProfesseurService>()
+          .getPlanning(professeurId, semestre: _semestre);
       if (!mounted) return;
       setState(() {
         _planning = planning;
@@ -81,7 +105,10 @@ class _PlanningCoursScreenState extends State<PlanningCoursScreen> {
       corps: EtatRequete(
         chargement: _chargement,
         erreur: _erreur,
-        vide: aucuneSeance,
+        // Une semaine vide n'escamote plus la page : le sélecteur de semestre
+        // doit rester atteignable, sans quoi on ne pourrait plus revenir du
+        // semestre qui vient de la vider.
+        vide: false,
         onReessayer: _charger,
         iconeVide: Icons.calendar_month_rounded,
         messageVide: 'Aucun horaire n\'est enregistré pour vos cours.',
@@ -89,13 +116,34 @@ class _PlanningCoursScreenState extends State<PlanningCoursScreen> {
           padding: Responsive.margePage(context),
           physics: const AlwaysScrollableScrollPhysics(),
           children: [
-            for (final entree in _jours.entries) ...[
-              _CarteJour(
-                libelle: entree.value,
-                seances: _seancesDe(entree.key),
-              ),
-              const SizedBox(height: 12),
-            ],
+            _FiltreSemestre(
+              choisi: _semestre,
+              onChoisir: (valeur) {
+                if (valeur == _semestre) return;
+                setState(() => _semestre = valeur);
+                _charger();
+              },
+            ),
+            if (aucuneSeance)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 32),
+                child: Text(
+                  _semestre.isEmpty
+                      ? 'Aucun horaire n\'est enregistré pour vos cours.'
+                      : 'Aucune séance au '
+                          '${_semestres[_semestre]!.toLowerCase()}.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: AppTheme.textMutedOf(context)),
+                ),
+              )
+            else
+              for (final entree in _jours.entries) ...[
+                _CarteJour(
+                  libelle: entree.value,
+                  seances: _seancesDe(entree.key),
+                ),
+                const SizedBox(height: 12),
+              ],
           ],
         ),
       ),
@@ -111,6 +159,37 @@ class _PlanningCoursScreenState extends State<PlanningCoursScreen> {
       }
     }
     return const [];
+  }
+}
+
+/// Sélecteur de semestre de la semaine type.
+class _FiltreSemestre extends StatelessWidget {
+  final String choisi;
+  final ValueChanged<String> onChoisir;
+
+  const _FiltreSemestre({required this.choisi, required this.onChoisir});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            for (final entree in _semestres.entries)
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ChoiceChip(
+                  label: Text(entree.value),
+                  selected: choisi == entree.key,
+                  onSelected: (_) => onChoisir(entree.key),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -189,13 +268,38 @@ class _CarteJour extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            seance.code ?? seance.titre,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                            ),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  seance.code ?? seance.titre,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              if (seance.libelleSemestre != null) ...[
+                                const SizedBox(width: 6),
+                                Pastille(
+                                  texte: seance.libelleSemestre!,
+                                  couleur: AppTheme.statutViolet,
+                                ),
+                              ],
+                            ],
                           ),
+                          // La classe avant la salle : c'est elle qui distingue
+                          // deux séances autrement identiques, quand la même
+                          // promotion se donne en Jour et en Soir.
+                          if (seance.libelleClasse.isNotEmpty)
+                            Text(
+                              seance.libelleClasse,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppTheme.textSecondaryOf(context),
+                              ),
+                            ),
                           Text(
                             [
                               if (seance.salle.isNotEmpty) seance.salle,

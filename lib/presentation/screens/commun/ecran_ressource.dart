@@ -45,6 +45,21 @@ class EcranRessource extends StatefulWidget {
   final Future<void> Function(Map<String, dynamic> valeurs)? onCreer;
   final String libelleCreation;
 
+  /// Création confiée à un ÉCRAN dédié plutôt qu'à la boîte de dialogue.
+  ///
+  /// Le formulaire déclaratif ne sait pas enchaîner des listes dépendantes :
+  /// ses options sont résolues une fois pour toutes avant l'ouverture. Or
+  /// certaines saisies sont des cascades — établissement, puis filière, puis
+  /// promotion —, chaque niveau ne pouvant être proposé qu'une fois le
+  /// précédent choisi. Ces écrans-là fournissent [onNouveau] à la place de
+  /// [champsCreation] : le bouton pousse leur page, et la liste se recharge à
+  /// son retour.
+  ///
+  /// La valeur rendue par la page n'est pas lue : seul compte le fait qu'elle
+  /// ait abouti — une page annulée rend {@code null} et la liste, rechargée,
+  /// se retrouve identique.
+  final Future<void> Function(BuildContext)? onNouveau;
+
   /// Options d'une liste déroulante à charger au serveur, par clé de champ.
   ///
   /// La quasi-totalité des formulaires enseignant commence par « choisissez un
@@ -91,6 +106,7 @@ class EcranRessource extends StatefulWidget {
     this.champsCreation = const [],
     this.onCreer,
     this.libelleCreation = 'Nouveau',
+    this.onNouveau,
     this.optionsDynamiques = const {},
     this.onSupprimer,
     this.onOuvrir,
@@ -227,7 +243,8 @@ class _EcranRessourceState extends State<EcranRessource> {
 
   @override
   Widget build(BuildContext context) {
-    final peutCreer = widget.onCreer != null && widget.champsCreation.isNotEmpty;
+    final peutCreer = widget.onNouveau != null
+        || (widget.onCreer != null && widget.champsCreation.isNotEmpty);
 
     return PagePortail(
       titre: widget.titre,
@@ -248,7 +265,9 @@ class _EcranRessourceState extends State<EcranRessource> {
             ],
       floatingActionButton: peutCreer
           ? FloatingActionButton.extended(
-              onPressed: _ouvrirCreation,
+              onPressed: () => widget.onNouveau != null
+                  ? _ouvrirEcranCreation()
+                  : _ouvrirCreation(),
               icon: const Icon(Icons.add_rounded),
               label: Text(widget.libelleCreation),
             )
@@ -308,6 +327,22 @@ class _EcranRessourceState extends State<EcranRessource> {
         ),
       ),
     );
+  }
+
+  /// Pousse l'écran de création, puis recharge la liste à son retour.
+  Future<void> _ouvrirEcranCreation() async {
+    try {
+      await widget.onNouveau!(context);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _message = _messageErreur(e);
+        _messageSucces = false;
+      });
+      return;
+    }
+    if (!mounted) return;
+    await _charger();
   }
 
   Future<void> _ouvrirCreation() async {
