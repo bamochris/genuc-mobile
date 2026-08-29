@@ -17,6 +17,30 @@ class AuthProvider extends ChangeNotifier {
   String? _error;
   String? _mfaChallengeToken;
 
+  /// Appelé dès qu'une session s'ouvre — connexion, second facteur validé, ou
+  /// session restaurée au démarrage.
+  ///
+  /// <h3>Ce que cela répare</h3>
+  ///
+  /// Le service FCM enregistre le jeton de l'appareil au DÉMARRAGE de
+  /// l'application, donc AVANT toute connexion. Or
+  /// `POST /api/notifications/push/enregistrer` exige une session : l'appel
+  /// partait, recevait un 401, et l'échec était simplement journalisé. Rien ne
+  /// réessayait ensuite, sinon une rotation de jeton FCM — qui n'arrive
+  /// pratiquement jamais. **Aucun appareil n'était donc enregistré, et aucune
+  /// notification push ne pouvait atteindre qui que ce soit.**
+  ///
+  /// Le défaut ne se voyait nulle part : le serveur envoyait ses notifications
+  /// sans erreur, à une liste d'appareils vide.
+  void Function()? onSessionOuverte;
+
+  /// Appelé à la déconnexion.
+  ///
+  /// Sans cela, le jeton de l'appareil reste rattaché au compte précédent :
+  /// le téléphone continue de recevoir SES notifications — notes, paiements,
+  /// changements d'horaire — après que son propriétaire s'est déconnecté.
+  void Function()? onSessionFermee;
+
   User? get user => _user;
   bool get isLoading => _isLoading;
   String? get error => _error;
@@ -63,6 +87,7 @@ class AuthProvider extends ChangeNotifier {
       switch (resultat) {
         case LoginSuccess(user: final user):
           _user = user;
+          onSessionOuverte?.call();
           _mfaChallengeToken = null;
           return true;
         case LoginMfaRequired(challengeToken: final token):
@@ -99,6 +124,7 @@ class AuthProvider extends ChangeNotifier {
         code: code,
       );
       _mfaChallengeToken = null;
+      onSessionOuverte?.call();
       return true;
     } on ApiException catch (e) {
       _error = e.message;
@@ -127,6 +153,7 @@ class AuthProvider extends ChangeNotifier {
       _user = null;
       _mfaChallengeToken = null;
       _error = null;
+      onSessionFermee?.call();
       _setLoading(false);
     }
   }
@@ -166,6 +193,7 @@ class AuthProvider extends ChangeNotifier {
       _user = null;
     } finally {
       _sessionRestauree = true;
+      if (_user != null) onSessionOuverte?.call();
       _setLoading(false);
     }
   }

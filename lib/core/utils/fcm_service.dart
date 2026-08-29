@@ -189,18 +189,57 @@ class FCMService {
     );
   }
 
-  /// Supprime le token du backend (déconnexion).
-  Future<void> unregister() async {
-    if (_fcmToken != null) {
-      try {
-        await _dio.post(
-          '/api/notifications/push/desenregistrer',
-          data: {'token': _fcmToken},
-        );
-      } catch (_) {}
+  /// (Ré)enregistre le jeton de cet appareil, maintenant qu'une session existe.
+  ///
+  /// `initialize()` s'exécute au DÉMARRAGE, donc avant toute connexion : son
+  /// enregistrement partait sans session et recevait un 401, silencieusement
+  /// journalisé. Aucun appareil n'était donc jamais enregistré, et le serveur
+  /// envoyait ses notifications push à une liste vide.
+  ///
+  /// Appelé par `AuthProvider.onSessionOuverte`. Le jeton est redemandé à
+  /// Firebase si on ne l'a pas encore — la permission a pu être accordée après
+  /// le démarrage.
+  Future<void> enregistrerJeton() async {
+    try {
+      _fcmToken ??= await _messaging.getToken();
+      if (_fcmToken != null) {
+        await _registerToken(_fcmToken!);
+      }
+    } catch (e) {
+      debugPrint("[FCM] Jeton indisponible à l'ouverture de session : $e");
     }
-    _fcmToken = null;
+  }
+
+  /// Détache le jeton du compte qui se déconnecte.
+  ///
+  /// Sans cet appel, l'appareil reste rattaché au compte précédent et continue
+  /// de recevoir SES notifications.
+  ///
+  /// Deux corrections ici. Le verbe : `DeviceTokenController.desenregistrer`
+  /// est un `@DeleteMapping`, et l'appel partait en POST — 405, jamais rien
+  /// détaché. Et le jeton n'est plus oublié localement : c'est le même
+  /// appareil, il faut pouvoir le réenregistrer à la prochaine connexion sans
+  /// redemander la permission.
+  Future<void> unregister() async {
+    final jeton = _fcmToken;
+    if (jeton == null) return;
+    try {
+      await _dio.delete(
+        '/api/notifications/push/desenregistrer',
+        data: {'token': jeton},
+      );
+    } catch (e) {
+      debugPrint('[FCM] Désenregistrement impossible : $e');
+    }
   }
 
   String? get token => _fcmToken;
+
+  /// Pose le jeton sans passer par Firebase. **Réservé aux tests.**
+  ///
+  /// `getToken()` exige le moteur Firebase natif, absent sous test : sans cela,
+  /// ni l'enregistrement ni le désenregistrement ne seraient vérifiables.
+  /// Même intention que `AuthProvider.definirUtilisateurPourTest`.
+  @visibleForTesting
+  void definirJetonPourTest(String? jeton) => _fcmToken = jeton;
 }

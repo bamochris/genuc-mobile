@@ -105,7 +105,15 @@ class GenucApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider<AuthProvider>(
-          create: (_) => AuthProvider(dependencies.authRepository)..initSession(),
+          // Le jeton de l'appareil est (ré)enregistré À L'OUVERTURE DE SESSION,
+          // et non au démarrage : la route d'enregistrement exige une session,
+          // et l'appel du démarrage recevait un 401 que personne ne rattrapait.
+          // Le câblage se fait ici, là où le service FCM est disponible, plutôt
+          // que d'injecter le service dans le fournisseur d'authentification.
+          create: (_) => AuthProvider(dependencies.authRepository)
+            ..onSessionOuverte = dependencies.fcmService.enregistrerJeton
+            ..onSessionFermee = dependencies.fcmService.unregister
+            ..initSession(),
         ),
         ChangeNotifierProvider<StudentProvider>(
           create: (_) => StudentProvider(dependencies.studentRepository),
