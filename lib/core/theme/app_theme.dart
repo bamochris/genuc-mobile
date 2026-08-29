@@ -129,6 +129,20 @@ class AppTheme {
           fontWeight: FontWeight.bold,
         ),
       ),
+      // Le bouton d'action flottant NE DÉCLARAIT AUCUNE COULEUR, et Material 3
+      // la déduisait alors d'un `ColorScheme` que nous ne renseignons qu'en
+      // partie. En thème sombre, la déduction tombait sur du NOIR posé sur le
+      // bleu `#1A3A7A` : 1,93:1 de contraste, c'est-à-dire illégible. Le
+      // défaut touchait d'un coup les seize écrans bâtis sur `EcranRessource`
+      // — « Nouveau recours », « Demander un transfert », « Écrire »… :
+      // l'action principale de chacun d'eux était le seul bouton illisible de
+      // la page. On déclare donc les deux couleurs, plutôt que de les laisser
+      // déduire : c'est le même vert que `ElevatedButton`, l'action première
+      // ayant la même identité partout dans l'application.
+      floatingActionButtonTheme: const FloatingActionButtonThemeData(
+        backgroundColor: secondary,
+        foregroundColor: Colors.white,
+      ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: secondary,
@@ -276,6 +290,25 @@ class AppTheme {
           color: Colors.white,
           fontWeight: FontWeight.bold,
         ),
+      ),
+      // Le bouton d'action flottant NE DÉCLARAIT AUCUNE COULEUR, et Material 3
+      // la déduisait alors d'un `ColorScheme` que nous ne renseignons qu'en
+      // partie. En thème sombre, la déduction tombait sur du NOIR posé sur le
+      // bleu `#1A3A7A` : 1,93:1 de contraste, c'est-à-dire illégible. Le
+      // défaut touchait d'un coup les seize écrans bâtis sur `EcranRessource`
+      // — « Nouveau recours », « Demander un transfert », « Écrire »… :
+      // l'action principale de chacun d'eux était le seul bouton illisible de
+      // la page. On déclare donc les deux couleurs, plutôt que de les laisser
+      // déduire : c'est le même vert que `ElevatedButton`, l'action première
+      // ayant la même identité partout dans l'application.
+      floatingActionButtonTheme: const FloatingActionButtonThemeData(
+        // Vert CLAIR et libellé FONCÉ — l'inversion habituelle des thèmes
+        // sombres. Reprendre le vert du thème clair (`#1D9E75`) sous un
+        // libellé blanc ne donnerait que 3,4:1, et le bouton lui-même se
+        // détacherait mal du fond ardoise. Ici : 8,4:1 pour le libellé, et le
+        // bouton reste la chose la plus visible de l'écran, ce qu'il doit être.
+        backgroundColor: secondaryLight,
+        foregroundColor: primaryDark,
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
