@@ -270,7 +270,10 @@ class _StatCard extends StatelessWidget {
             valeur,
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.w800,
-                  color: couleur,
+                  // Le chiffre est la seule chose que l'oeil vient chercher
+                  // dans cette carte. En bleu nuit brut, il rendait 1,1:1 sur
+                  // l'ardoise : la carte « Cours attribués » était vide.
+                  color: AppTheme.accentLisible(context, couleur),
                   fontSize: 22,
                 ),
           ),
@@ -347,27 +350,31 @@ class _SeanceCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(
-              color: AppTheme.primary.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Column(
-              children: [
-                Icon(Icons.schedule_rounded, color: AppTheme.primary, size: 16),
-                const SizedBox(height: 4),
-                Text(
-                  seance.plageHoraire.isEmpty ? '—' : seance.plageHoraire,
-                  style: const TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.primary,
+          Builder(builder: (context) {
+            final (fond, accent) =
+                AppTheme.pastilleDe(context, AppTheme.primary);
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: fond,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                children: [
+                  Icon(Icons.schedule_rounded, color: accent, size: 16),
+                  const SizedBox(height: 4),
+                  Text(
+                    seance.plageHoraire.isEmpty ? '—' : seance.plageHoraire,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: accent,
+                    ),
                   ),
-                ),
-              ],
-            ),
-          ),
+                ],
+              ),
+            );
+          }),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -393,21 +400,7 @@ class _SeanceCard extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: couleurStatut.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              seance.libelleStatut,
-              style: TextStyle(
-                color: couleurStatut,
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
+          Pastille(texte: seance.libelleStatut, couleur: couleurStatut),
         ],
       ),
     );
@@ -496,21 +489,7 @@ class _AlerteCard extends StatelessWidget {
             ),
           ),
           if (alerte.action.isNotEmpty)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: couleur.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                alerte.action,
-                style: TextStyle(
-                  color: couleur,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
+            Pastille(texte: alerte.action, couleur: couleur),
         ],
       ),
     );
@@ -641,12 +620,13 @@ class _ErreurState extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.error_rounded, size: 64, color: AppTheme.error),
+            Icon(Icons.error_rounded,
+                size: 64, color: AppTheme.errorOf(context)),
             const SizedBox(height: 16),
             Text(
               'Erreur de chargement',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: AppTheme.error,
+                    color: AppTheme.errorOf(context),
                     fontWeight: FontWeight.bold,
                   ),
             ),
@@ -659,13 +639,13 @@ class _ErreurState extends StatelessWidget {
                   ),
             ),
             const SizedBox(height: 24),
+            // Sans surcharge de couleur : le bleu nuit impose ici donnait un
+            // bouton indiscernable du fond ardoise. Le theme sait deja quoi
+            // peindre, et il le fait de facon lisible dans les deux modes.
             ElevatedButton.icon(
               onPressed: onRetry,
               icon: const Icon(Icons.refresh_rounded),
               label: const Text('Réessayer'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primary,
-              ),
             ),
           ],
         ),
@@ -689,25 +669,31 @@ class _ActionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // « Encoder les notes » portait la couleur de marque brute sur un voile de
+    // cette meme couleur : bleu nuit sur bleu nuit, la tuile etait muette en
+    // theme sombre. Le libelle se lit, donc 4,5:1 ; on le donne aussi au
+    // glyphe, qui l'accompagne et gagne a ne pas s'en detacher.
+    final (fond, accent) = AppTheme.pastilleDe(context, color);
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
       child: Container(
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
+          color: fond,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withValues(alpha: 0.3)),
+          border: Border.all(color: accent.withValues(alpha: 0.3)),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: color, size: 30),
+            Icon(icon, color: accent, size: 30),
             const SizedBox(height: 8),
             Text(
               label,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     fontWeight: FontWeight.w600,
-                    color: color,
+                    color: accent,
                   ),
               textAlign: TextAlign.center,
             ),

@@ -576,7 +576,9 @@ class _AiguillageSmartPresence extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(Icons.cast_rounded, size: 20, color: AppTheme.primary),
+              Icon(Icons.cast_rounded,
+                  size: 20,
+                  color: AppTheme.accentGraphique(context, AppTheme.primary)),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(

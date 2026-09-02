@@ -46,12 +46,12 @@ class EtatErreur extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.error_rounded, size: 64, color: AppTheme.error),
+            Icon(Icons.error_rounded, size: 64, color: AppTheme.errorOf(context)),
             const SizedBox(height: 16),
             Text(
               'Erreur de chargement',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: AppTheme.error,
+                    color: AppTheme.errorOf(context),
                     fontWeight: FontWeight.bold,
                   ),
             ),
@@ -153,7 +153,7 @@ class SectionCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(icon, color: AppTheme.primary),
+              Icon(icon, color: AppTheme.accentGraphique(context, AppTheme.primary)),
               const SizedBox(width: 12),
               Text(
                 title,
@@ -232,16 +232,21 @@ class PillBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Même calcul que [Pastille] : le voile coloré éclaircit le fond, et c'est
+    // ce fond-là que le libellé doit franchir. `color` posée telle quelle
+    // rendait `#DC3545` sur `#352A3C` — 2,4:1.
+    final (fond, texte) = AppTheme.pastilleDe(context, color);
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
+        color: fond,
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
         label,
         style: TextStyle(
-          color: color,
+          color: texte,
           fontSize: 11,
           fontWeight: FontWeight.w700,
         ),

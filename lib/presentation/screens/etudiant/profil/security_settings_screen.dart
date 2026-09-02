@@ -591,18 +591,18 @@ class _ErreurBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppTheme.error.withValues(alpha: 0.1),
+        color: AppTheme.fondPastilleOpaque(context, AppTheme.errorOf(context)),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.error),
+        border: Border.all(color: AppTheme.errorOf(context)),
       ),
       child: Row(
         children: [
-          Icon(Icons.error_rounded, color: AppTheme.error),
+          Icon(Icons.error_rounded, color: _rouge(context)),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
               message,
-              style: TextStyle(color: AppTheme.error),
+              style: TextStyle(color: _rouge(context)),
             ),
           ),
         ],
@@ -668,7 +668,8 @@ class _SectionCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(icon, color: AppTheme.primary),
+              Icon(icon,
+                  color: AppTheme.accentGraphique(context, AppTheme.primary)),
               const SizedBox(width: 12),
               Text(
                 title,
@@ -821,7 +822,7 @@ class _BoutonAction extends StatelessWidget {
       child: ElevatedButton(
         onPressed: isLoading ? null : onPressed,
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppTheme.primary,
+          // Fond laissé au thème : cf. les deux boutons « Réessayer ».
           padding: const EdgeInsets.symmetric(vertical: 16),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
@@ -915,3 +916,13 @@ class _TwoFactorTile extends StatelessWidget {
     );
   }
 }
+
+/// Rouge d'un encart d'erreur, mesuré sur le fond de l'encart lui-même.
+///
+/// Le voile rouge à dix pour cent éclaircit la surface : le texte n'a plus le
+/// fond de la page sous lui mais celui de l'encart, et c'est celui-là qu'il
+/// doit franchir.
+Color _rouge(BuildContext context) => AppTheme.lisibleSur(
+      AppTheme.errorOf(context),
+      AppTheme.fondPastilleOpaque(context, AppTheme.errorOf(context)),
+    );

@@ -347,13 +347,13 @@ class _ErreurState extends StatelessWidget {
             Icon(
               Icons.error_rounded,
               size: 64,
-              color: AppTheme.error,
+              color: AppTheme.errorOf(context),
             ),
             const SizedBox(height: 16),
             Text(
               'Erreur de chargement',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: AppTheme.error,
+                color: AppTheme.errorOf(context),
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -366,13 +366,13 @@ class _ErreurState extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
+            // Sans surcharge de fond : le bleu nuit imposé ici privait le
+            // bouton du libellé clair que le thème sombre lui associe, et
+            // « Réessayer » retombait à 1,15:1.
             ElevatedButton.icon(
               onPressed: onRetry,
               icon: const Icon(Icons.refresh_rounded),
               label: const Text('Réessayer'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primary,
-              ),
             ),
           ],
         ),

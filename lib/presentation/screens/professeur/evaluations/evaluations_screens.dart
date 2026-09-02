@@ -478,51 +478,51 @@ class GridViewMentions extends StatelessWidget {
       runSpacing: 8,
       children: [
         for (final (mention, min, max, grade) in baremeLmd)
-          Container(
-            width: 148,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: AppTheme.fondPastille(
-                context,
-                AppTheme.accentLisible(context, couleurMention(mention)),
+          // Les trois textes de l'alvéole se mesurent sur l'ALVÉOLE, pas sur
+          // la carte qui la porte : le voile coloré l'éclaircit, et c'est ce
+          // qui faisait retomber « 18–20 » à 3,5:1 malgré une couleur déjà
+          // corrigée. « Grade A » y perdait un demi-point de plus, la teinte
+          // atténuée étant calibrée pour la carte nue.
+          Builder(builder: (context) {
+            final (fond, accent) =
+                AppTheme.pastilleDe(context, couleurMention(mention));
+            return Container(
+              width: 148,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: fond,
+                borderRadius: BorderRadius.circular(12),
               ),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              children: [
-                Text(
-                  '$min–$max',
-                  style: TextStyle(
-                    fontSize: 19,
-                    fontWeight: FontWeight.w900,
-                    color: AppTheme.accentLisible(
-                      context,
-                      couleurMention(mention),
+              child: Column(
+                children: [
+                  Text(
+                    '$min–$max',
+                    style: TextStyle(
+                      fontSize: 19,
+                      fontWeight: FontWeight.w900,
+                      color: accent,
                     ),
                   ),
-                ),
-                Text(
-                  mention,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: AppTheme.accentLisible(
-                      context,
-                      couleurMention(mention),
+                  Text(
+                    mention,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: accent,
                     ),
                   ),
-                ),
-                Text(
-                  'Grade $grade',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: AppTheme.textMutedOf(context),
+                  Text(
+                    'Grade $grade',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: AppTheme.texteMuteSur(context, fond),
+                    ),
                   ),
-                ),
-              ],
-            ),
-          ),
+                ],
+              ),
+            );
+          }),
       ],
     );
   }

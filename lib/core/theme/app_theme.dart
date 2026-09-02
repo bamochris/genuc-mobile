@@ -43,8 +43,21 @@ class AppTheme {
   static const Color textSecondaryDark = Color(0xFFCBD5E1);
   static const Color textMutedDark = Color(0xFF94A3B8);
 
+  /// Rouge d'erreur du thème sombre.
+  ///
+  /// `#DC3545` ne rend que 3,4:1 sur l'ardoise : lisible de justesse, et ce
+  /// sont précisément les messages qu'on ne peut pas se permettre de rater.
+  /// Même teinte, clarté remontée — c'est le `--color-danger-text` du portail
+  /// web, à l'identique.
+  static const Color errorDark = Color(0xFFFCA5A5);
+
   static bool estSombre(BuildContext context) =>
       Theme.of(context).brightness == Brightness.dark;
+
+  /// Rouge d'erreur adapté au thème courant. Les écrans ne doivent plus poser
+  /// `AppTheme.error` en dur : il disparaît à moitié sur fond ardoise.
+  static Color errorOf(BuildContext context) =>
+      estSombre(context) ? errorDark : error;
 
   /// Surface translucide adaptée au thème courant.
   static Color glass(BuildContext context) =>
@@ -80,21 +93,195 @@ class AppTheme {
   static Color surfaceAlt(BuildContext context) =>
       estSombre(context) ? const Color(0xFF16233A) : const Color(0xFFF4F7FB);
 
-  /// Teinte d'accent lisible sur les deux fonds pour une couleur de marque
-  /// donnée. Le bleu nuit et le rouge foncé passent sous le seuil de contraste
-  /// sur ardoise : on les éclaircit plutôt que de les laisser tels quels.
-  static Color accentLisible(BuildContext context, Color couleur) {
-    if (!estSombre(context)) return couleur;
-    final hsl = HSLColor.fromColor(couleur);
-    // Remonte la clarté au minimum requis sans dénaturer la teinte.
-    return hsl.withLightness(hsl.lightness.clamp(0.62, 1.0)).toColor();
+  // ─── Lisibilité : on la CALCULE, on ne l'estime plus ──────────────
+  //
+  // `accentLisible` remontait la clarté à 0,62 en thème sombre, un chiffre
+  // choisi à vue. Il tirait bien le bleu nuit hors de l'invisible, mais sans
+  // rien garantir : mesuré sur l'arbre monté, le bleu d'accent rendait
+  // `#5684E6` sur le fond de sa propre pastille, soit 3,2:1 — au-dessus du
+  // seuil de l'invisible, en dessous du seuil de LECTURE. Une centaine de
+  // pastilles du portail professeur étaient dans ce cas.
+  //
+  // La clarté n'est donc plus posée : elle est cherchée, jusqu'au rapport de
+  // contraste demandé sur le fond RÉELLEMENT peint dessous. La teinte et la
+  // saturation ne bougent pas — le vert reste le vert de la marque, le rouge
+  // reste rouge —, seule la clarté se déplace, et du minimum nécessaire.
+
+  /// Niveaux du WCAG 2.1, nommés pour que les appels se lisent.
+  ///
+  /// [ratioTexte] vaut pour tout ce qui se lit ; [ratioGraphique] pour ce qui
+  /// s'identifie sans se lire — glyphes d'icône, jauges, bordures. Appliquer
+  /// 4,5:1 à une icône de 40 px délaverait des teintes parfaitement nettes.
+  static const double ratioTexte = 4.5;
+  static const double ratioGraphique = 3.0;
+
+  /// Rapport de contraste WCAG entre deux couleurs OPAQUES (1,0 à 21,0).
+  static double contraste(Color a, Color b) {
+    final la = _luminance(a);
+    final lb = _luminance(b);
+    return ((la > lb ? la : lb) + 0.05) / ((la < lb ? la : lb) + 0.05);
   }
+
+  static double _luminance(Color c) =>
+      Color.from(alpha: 1.0, red: c.r, green: c.g, blue: c.b).computeLuminance();
+
+  /// [dessus] composé sur [dessous] — ce que l'œil voit d'une couche
+  /// translucide.
+  ///
+  /// Les surfaces du portail sont translucides par principe (le visuel de
+  /// marque doit transparaître) : raisonner sur `#1E293B` alors que l'écran
+  /// peint `#1C2637` fausse tous les calculs qui suivent.
+  static Color composer(Color dessus, Color dessous) {
+    final a = dessus.a;
+    if (a >= 1.0) return dessus;
+    return Color.from(
+      alpha: 1.0,
+      red: dessus.r * a + dessous.r * (1 - a),
+      green: dessus.g * a + dessous.g * (1 - a),
+      blue: dessus.b * a + dessous.b * (1 - a),
+    );
+  }
+
+  /// [couleur] déplacée en clarté jusqu'à atteindre [cible] sur [fond].
+  ///
+  /// La direction n'est pas décidée d'après le thème mais d'après le fond
+  /// lui-même : on part du côté qui offre le plus de marge (blanc ou noir).
+  /// C'est ce qui rend la fonction juste sur un fond inattendu — une pastille
+  /// ambrée claire posée dans un écran sombre, par exemple, où « éclaircir
+  /// parce qu'on est en thème sombre » irait exactement à l'envers.
+  ///
+  /// La recherche est dichotomique parce que la clarté HSL est monotone en
+  /// luminance : le premier point qui satisfait le seuil est aussi celui qui
+  /// dénature le moins la couleur d'origine.
+  static Color lisibleSur(Color couleur, Color fond,
+      {double cible = ratioTexte}) {
+    final opaque = couleur.a >= 1.0 ? couleur : composer(couleur, fond);
+    if (contraste(opaque, fond) >= cible) return couleur;
+
+    final hsl = HSLColor.fromColor(opaque);
+    // Vers le blanc ou vers le noir : on suit la marge, pas le thème.
+    final extreme =
+        contraste(const Color(0xFFFFFFFF), fond) >= contraste(const Color(0xFF000000), fond)
+            ? 1.0
+            : 0.0;
+    final butoir = hsl.withLightness(extreme).toColor();
+    // Même l'extrême n'y suffit pas (fond gris moyen) : on le rend quand même,
+    // c'est le mieux que cette teinte puisse faire ici.
+    if (contraste(butoir, fond) < cible) return butoir;
+
+    var insuffisant = hsl.lightness;
+    var suffisant = extreme;
+    for (var i = 0; i < 16; i++) {
+      final milieu = (insuffisant + suffisant) / 2;
+      if (contraste(hsl.withLightness(milieu).toColor(), fond) >= cible) {
+        suffisant = milieu;
+      } else {
+        insuffisant = milieu;
+      }
+    }
+    return hsl.withLightness(suffisant).toColor();
+  }
+
+  /// [couleur] éclaircie ou assombrie jusqu'à atteindre [cible] sur CHACUN
+  /// des [fonds].
+  ///
+  /// Un dégradé n'a pas un fond mais deux, et un glyphe posé dessus les
+  /// traverse tous les deux. Résoudre sur le premier venu laissait l'autre
+  /// bout sous le seuil — c'est ce qui arrivait aux plaques d'icône, dont le
+  /// glyphe rendait 2,3:1 sur l'extrémité claire de leur propre dégradé.
+  static Color lisibleSurToutes(Color couleur, List<Color> fonds,
+      {double cible = ratioTexte}) {
+    if (fonds.isEmpty) return couleur;
+    double pire(Color c) =>
+        fonds.map((f) => contraste(c, f)).reduce((a, b) => a < b ? a : b);
+    if (pire(couleur) >= cible) return couleur;
+
+    final hsl = HSLColor.fromColor(couleur);
+    // La marge se juge sur le fond le plus DÉFAVORABLE : c'est lui qui décide
+    // du sens, faute de quoi on s'éloignerait d'un fond en se rapprochant de
+    // l'autre.
+    final extreme = pire(const Color(0xFFFFFFFF)) >= pire(const Color(0xFF000000))
+        ? 1.0
+        : 0.0;
+    final butoir = hsl.withLightness(extreme).toColor();
+    if (pire(butoir) < cible) return butoir;
+
+    var insuffisant = hsl.lightness;
+    var suffisant = extreme;
+    for (var i = 0; i < 16; i++) {
+      final milieu = (insuffisant + suffisant) / 2;
+      if (pire(hsl.withLightness(milieu).toColor()) >= cible) {
+        suffisant = milieu;
+      } else {
+        insuffisant = milieu;
+      }
+    }
+    return hsl.withLightness(suffisant).toColor();
+  }
+
+  /// Couleur RÉELLEMENT peinte par une carte du portail.
+  ///
+  /// `Theme.of(context).cardColor` rend `#1E293B` **à 86 %** : c'est une
+  /// consigne de peinture, pas une couleur. Tout calcul de contraste doit
+  /// partir de sa composition sur le fond du `Scaffold`.
+  static Color surfaceCarte(BuildContext context) {
+    final theme = Theme.of(context);
+    return composer(theme.cardColor, theme.scaffoldBackgroundColor);
+  }
+
+  /// Teinte d'accent lisible en TEXTE sur la carte courante.
+  ///
+  /// Conserve le nom historique : c'est l'accesseur qu'appellent les écrans
+  /// des deux portails. Seule sa promesse a changé — elle est désormais
+  /// vérifiable, et vérifiée par `mode_sombre_donnees_test.dart`.
+  static Color accentLisible(BuildContext context, Color couleur) =>
+      lisibleSur(couleur, surfaceCarte(context));
+
+  /// Même chose pour un tracé qui ne se lit pas : icône, jauge, filet.
+  static Color accentGraphique(BuildContext context, Color couleur) =>
+      lisibleSur(couleur, surfaceCarte(context), cible: ratioGraphique);
 
   /// Fond d'une pastille de statut, dérivé de sa couleur : les fonds pastel
   /// figés (`#E8F8F2`, `#FEF3C7`…) du web deviennent des aplats blancs en
   /// thème sombre.
   static Color fondPastille(BuildContext context, Color couleur) =>
       couleur.withValues(alpha: estSombre(context) ? 0.20 : 0.12);
+
+  /// Fond opaque d'une pastille, tel qu'il est peint — le voile coloré
+  /// composé sur la carte.
+  static Color fondPastilleOpaque(BuildContext context, Color couleur) =>
+      composer(fondPastille(context, couleur), surfaceCarte(context));
+
+  /// Le couple (fond, premier plan) d'une pastille de statut.
+  ///
+  /// Les deux ensemble, parce qu'ils se déterminent l'un l'autre : le voile
+  /// coloré éclaircit le fond, et c'est CE fond-là — pas la carte nue — que le
+  /// texte doit franchir. Les calculer séparément, c'est ce qui laissait passer
+  /// une centaine de pastilles à 3,2:1.
+  ///
+  /// Le fond rendu est **opaque**, et c'est délibéré. Une pastille translucide
+  /// prend la couleur de ce qui se trouve dessous, qu'elle ne connaît pas :
+  /// posée sur une ligne de notification non lue, elle-même teintée, la
+  /// pastille « Nouveau » retombait à 3,9:1 alors que le calcul en promettait
+  /// 4,5. Un aplat opaque rend la mesure exacte partout, et se distingue mieux
+  /// de la surface qui l'accueille — ce qu'on attend précisément d'une
+  /// étiquette.
+  static (Color fond, Color texte) pastilleDe(
+    BuildContext context,
+    Color couleur, {
+    double cible = ratioTexte,
+  }) {
+    final fond = fondPastilleOpaque(context, couleur);
+    return (fond, lisibleSur(couleur, fond, cible: cible));
+  }
+
+  /// Texte atténué (métadonnée, mention secondaire) lisible sur [fond].
+  ///
+  /// `textMutedOf` est calibré pour la carte ; posé sur une alvéole teintée il
+  /// perd un demi-point de contraste et passe sous le seuil. Ici la teinte
+  /// grise de départ est conservée, sa clarté seule s'ajuste.
+  static Color texteMuteSur(BuildContext context, Color fond) =>
+      lisibleSur(textMutedOf(context), fond);
 
   // ─── Palette de statuts, commune aux deux portails ───
   // Reprise des constantes `C` du frontend web (MesCours.jsx et suivants).
@@ -104,6 +291,16 @@ class AppTheme {
   static const Color statutRouge = Color(0xFFB91C1C);
   static const Color statutViolet = Color(0xFF6B21A8);
   static const Color statutNavy = Color(0xFF0B1F4A);
+
+  /// Le vert de marque, assombri juste assez pour porter un libellé BLANC à
+  /// 4,5:1.
+  ///
+  /// `#1D9E75` sous du blanc ne donne que 3,4:1 — sur le bouton d'action
+  /// principal, c'est-à-dire sur le libellé le plus important de chaque écran,
+  /// et dans les DEUX thèmes. Le défaut ne venait donc pas du mode sombre : il
+  /// y était simplement plus visible. Même teinte, même saturation.
+  static final Color secondaryLisible =
+      lisibleSur(secondary, const Color(0xFFFFFFFF));
 
   static ThemeData get lightTheme {
     final textTheme = GoogleFonts.interTextTheme();
@@ -139,13 +336,16 @@ class AppTheme {
       // la page. On déclare donc les deux couleurs, plutôt que de les laisser
       // déduire : c'est le même vert que `ElevatedButton`, l'action première
       // ayant la même identité partout dans l'application.
-      floatingActionButtonTheme: const FloatingActionButtonThemeData(
-        backgroundColor: secondary,
+      floatingActionButtonTheme: FloatingActionButtonThemeData(
+        backgroundColor: secondaryLisible,
         foregroundColor: Colors.white,
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: secondary,
+          // `secondaryLisible` et non `secondary` : cf. sa déclaration — le
+          // blanc sur `#1D9E75` ne franchit pas 4,5:1, et c'est le libellé du
+          // bouton principal de chaque écran.
+          backgroundColor: secondaryLisible,
           foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
           shape: RoundedRectangleBorder(
@@ -159,8 +359,10 @@ class AppTheme {
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: secondary,
-          side: const BorderSide(color: secondary),
+          // Ici le vert est du TEXTE posé sur le fond clair : même exigence,
+          // même teinte.
+          foregroundColor: secondaryLisible,
+          side: BorderSide(color: secondaryLisible),
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),
@@ -169,6 +371,9 @@ class AppTheme {
             fontWeight: FontWeight.w700,
           ),
         ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(foregroundColor: secondaryLisible),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
@@ -278,7 +483,10 @@ class AppTheme {
         primary: primaryLight,
         secondary: secondaryLight,
         surface: Color(0xFF1e293b),
-        error: error,
+        // `errorDark`, pas `error` : cf. sa déclaration. Material peint avec
+        // cette teinte les messages de validation des champs, qui étaient à
+        // 3,4:1 sur le fond ardoise.
+        error: errorDark,
       ),
       scaffoldBackgroundColor: const Color(0xFF0f172a),
       appBarTheme: AppBarTheme(
@@ -312,8 +520,12 @@ class AppTheme {
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: secondary,
-          foregroundColor: Colors.white,
+          // Exactement le couple du bouton flottant ci-dessus, et pour la même
+          // raison : vert CLAIR sous un libellé FONCÉ. Le vert de marque sous
+          // du blanc ne rendait que 3,4:1 — le bouton principal de l'écran
+          // était le texte le moins lisible de la page. Ici : 8,4:1.
+          backgroundColor: secondaryLight,
+          foregroundColor: primaryDark,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),
@@ -323,6 +535,9 @@ class AppTheme {
             letterSpacing: 0.5,
           ),
         ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(foregroundColor: secondaryLight),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
@@ -359,7 +574,10 @@ class AppTheme {
           fontSize: 13,
         ),
         hintStyle: textTheme.bodyMedium?.copyWith(
-          color: const Color(0xFF64748b),
+          // `#64748B` ne rendait que 3,8:1 sur le fond du champ. Un texte
+          // indicatif se lit — c'est même souvent la seule consigne de saisie
+          // affichée : il relève du seuil du texte, pas de celui d'un ornement.
+          color: textMutedDark,
         ),
       ),
       textTheme: textTheme.copyWith(

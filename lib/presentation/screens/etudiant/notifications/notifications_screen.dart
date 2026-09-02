@@ -256,7 +256,7 @@ class _NotificationTile extends StatelessWidget {
             IconButton(
               icon: const Icon(Icons.mark_email_read_rounded, size: 20),
               tooltip: 'Marquer comme lu',
-              color: AppTheme.primary,
+              color: AppTheme.accentGraphique(context, AppTheme.primary),
               onPressed: onMarquerLue,
             ),
         ],

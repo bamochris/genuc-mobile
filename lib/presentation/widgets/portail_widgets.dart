@@ -174,8 +174,43 @@ class IconePlaque extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accent = AppTheme.accentLisible(context, couleur);
+    // ─── Le dégradé d'abord, le glyphe ensuite ───
+    //
+    // L'ordre compte, et c'est tout le correctif. Le dégradé était peint avec
+    // la couleur DÉJÀ éclaircie du glyphe : éclaircir le glyphe éclaircissait
+    // donc son fond d'autant, et le contraste ne bougeait pas — les plaques
+    // du tableau de bord restaient à 2,3:1 quoi qu'on fasse. Le voile part
+    // désormais de la couleur d'origine, qui ne dépend de rien, et le glyphe
+    // se résout contre lui.
+    //
+    // Contre LES DEUX extrémités du dégradé, et pas seulement la première :
+    // le glyphe les traverse toutes les deux.
+    final sombre = AppTheme.estSombre(context);
+    final carte = AppTheme.surfaceCarte(context);
     final rayon = taille * 0.32;
+
+    final voiles = pleine
+        ? [couleur, Color.lerp(couleur, Colors.black, 0.22)!]
+        : [
+            couleur.withValues(alpha: sombre ? 0.26 : 0.16),
+            couleur.withValues(alpha: sombre ? 0.14 : 0.08),
+          ];
+    final fondsOpaques =
+        voiles.map((v) => AppTheme.composer(v, carte)).toList(growable: false);
+
+    // Une plaque PLEINE porte un glyphe blanc, dont la lisibilité tient à
+    // l'aplat lui-même : c'est donc le FOND qu'on ajuste, pas le glyphe.
+    final couleurPleine = pleine
+        ? AppTheme.lisibleSur(couleur, Colors.white,
+            cible: AppTheme.ratioGraphique)
+        : couleur;
+    final accent = pleine
+        ? Colors.white
+        : AppTheme.lisibleSurToutes(couleur, fondsOpaques,
+            cible: AppTheme.ratioGraphique);
+    final degrade = pleine
+        ? [couleurPleine, Color.lerp(couleurPleine, Colors.black, 0.22)!]
+        : voiles;
 
     return Container(
       width: taille,
@@ -184,12 +219,7 @@ class IconePlaque extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: pleine
-              ? [accent, Color.lerp(accent, Colors.black, 0.22)!]
-              : [
-                  accent.withValues(alpha: AppTheme.estSombre(context) ? 0.26 : 0.16),
-                  accent.withValues(alpha: AppTheme.estSombre(context) ? 0.14 : 0.08),
-                ],
+          colors: degrade,
         ),
         borderRadius: BorderRadius.circular(rayon),
         border: pleine
@@ -198,7 +228,7 @@ class IconePlaque extends StatelessWidget {
         boxShadow: pleine
             ? [
                 BoxShadow(
-                  color: accent.withValues(alpha: 0.35),
+                  color: couleurPleine.withValues(alpha: 0.35),
                   blurRadius: taille * 0.30,
                   offset: Offset(0, taille * 0.09),
                 ),
@@ -208,7 +238,7 @@ class IconePlaque extends StatelessWidget {
       child: Icon(
         icone,
         size: taille * 0.52,
-        color: pleine ? Colors.white : accent,
+        color: accent,
       ),
     );
   }
@@ -455,12 +485,19 @@ class Pastille extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accent = AppTheme.accentLisible(context, couleur);
+    // Le fond ET le texte sont calculés ENSEMBLE, parce qu'ils se déterminent
+    // l'un l'autre : le voile coloré éclaircit la carte, et c'est ce fond-là
+    // — plus clair que la carte nue — que le libellé doit franchir. Les
+    // calculer séparément, comme avant, laissait une centaine de pastilles du
+    // portail professeur à 3,2:1 : lisibles à l'œil neuf, épuisantes à lire.
+    final (fond, accent) = AppTheme.pastilleDe(context, couleur);
+    // Le glyphe de 11 px accolé au libellé se lit comme lui, pas comme une
+    // icône : même seuil.
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: AppTheme.fondPastille(context, accent),
+        color: fond,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
@@ -643,16 +680,16 @@ class BandeauMessage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final couleur = AppTheme.accentLisible(
+    final (fond, couleur) = AppTheme.pastilleDe(
       context,
-      succes ? AppTheme.success : AppTheme.error,
+      succes ? AppTheme.success : AppTheme.errorOf(context),
     );
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: AppTheme.fondPastille(context, couleur),
+        color: fond,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: couleur.withValues(alpha: 0.4)),
       ),
@@ -702,7 +739,11 @@ class BarreProgression extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Deux teintes et non une : « 62 % » est du texte sur la carte (4,5:1),
+    // la jauge est un aplat (3,0:1). Les confondre condamnait le vert de
+    // marque, qui ne franchit pas 4,5:1 sur fond blanc.
     final accent = AppTheme.accentLisible(context, couleur);
+    final aplat = AppTheme.accentGraphique(context, couleur);
     final pct = (valeur.clamp(0.0, 1.0) * 100).round();
 
     return Column(
@@ -739,7 +780,7 @@ class BarreProgression extends StatelessWidget {
             value: valeur.clamp(0.0, 1.0),
             minHeight: 8,
             backgroundColor: AppTheme.surfaceAlt(context),
-            valueColor: AlwaysStoppedAnimation(accent),
+            valueColor: AlwaysStoppedAnimation(aplat),
           ),
         ),
       ],

@@ -17,14 +17,21 @@ import 'package:flutter_test/flutter_test.dart';
 /// On applique donc la formule de contraste du WCAG à ce que l'utilisateur voit :
 /// la couleur composée du premier plan sur celle du fond opaque le plus proche.
 class AuditContraste {
-  /// Seuil retenu : 3,0:1.
+  /// Seuil du TEXTE : 4,5:1 — le niveau AA du WCAG pour le texte courant.
   ///
-  /// Le WCAG demande 4,5:1 pour du texte courant et 3,0:1 pour le grand texte
-  /// et les éléments graphiques. On retient le seuil BAS pour tout le monde :
-  /// l'objet de cet audit est de trouver ce qui est *invisible*, pas de refaire
-  /// la charte. Un signalement ici est donc toujours un vrai défaut, jamais une
-  /// nuance discutable — c'est ce qui rend la liste actionnable.
-  static const double seuil = 3.0;
+  /// Il valait 3,0:1 à l'origine, pour ne signaler que l'invisible. C'était
+  /// suffisant tant qu'on cherchait les fautes grossières, mais trop laxiste
+  /// pour ce qu'on veut garantir désormais : le bleu d'accent `#185FA5` passe
+  /// à 2,3:1 sur l'ardoise et le rouge `#B91C1C` à 2,4:1 — tous deux
+  /// signalés —, tandis que le bleu `#0d6efd` s'en tirait à 3,4:1 sans être
+  /// pour autant confortable à lire. Le seuil AA tranche sans discussion.
+  static const double seuilTexte = 4.5;
+
+  /// Seuil des ICÔNES et éléments graphiques : 3,0:1, le minimum AA pour un
+  /// objet non textuel. Une icône est une forme pleine de 16 à 64 pixels : la
+  /// juger au seuil du corps de texte condamnerait des teintes parfaitement
+  /// identifiables, et noierait les vrais défauts sous le bruit.
+  static const double seuilIcone = 3.0;
 
   /// Audit de l'arbre actuellement monté.
   static RapportContraste auditer(WidgetTester tester) {
@@ -40,7 +47,8 @@ class AuditContraste {
         final style = DefaultTextStyle.of(element).style.merge(widget.style);
         final premierPlan = style.color;
         if (premierPlan == null) continue;
-        if (_examiner(defauts, element, premierPlan, 'texte « $texte »')) {
+        if (_examiner(defauts, element, premierPlan, 'texte « $texte »',
+            seuilTexte)) {
           examines++;
         }
       }
@@ -48,7 +56,8 @@ class AuditContraste {
       if (widget is Icon) {
         final premierPlan = widget.color ?? IconTheme.of(element).color;
         if (premierPlan == null) continue;
-        if (_examiner(defauts, element, premierPlan, 'icône ${widget.icon}')) {
+        if (_examiner(defauts, element, premierPlan, 'icône ${widget.icon}',
+            seuilIcone)) {
           examines++;
         }
       }
@@ -63,7 +72,7 @@ class AuditContraste {
   /// @return `true` si l'élément a pu être MESURÉ — c'est ce compte qui dit si
   ///         l'audit a fait son travail ou s'il est passé à côté de tout.
   static bool _examiner(List<DefautContraste> defauts, Element element,
-      Color premierPlan, String quoi) {
+      Color premierPlan, String quoi, double seuil) {
     // Un élément entièrement transparent n'est pas un défaut de contraste :
     // c'est une animation en cours, ou un widget délibérément masqué.
     if (premierPlan.a == 0) return false;
@@ -82,6 +91,7 @@ class AuditContraste {
         premierPlan: premierPlan,
         fond: fond,
         rapport: rapport,
+        seuil: seuil,
         chemin: _cheminEcran(element),
         ancetres: _traceAncetres(element),
       ));
@@ -261,6 +271,11 @@ class DefautContraste {
   final Color premierPlan;
   final Color fond;
   final double rapport;
+
+  /// Le seuil que ce défaut n'atteint pas — 4,5 pour du texte, 3,0 pour une
+  /// icône. Sans lui, deux lignes du rapport à « 3,20:1 » sembleraient
+  /// contradictoires, l'une signalée et l'autre non.
+  final double seuil;
   final String chemin;
   final String ancetres;
 
@@ -269,6 +284,7 @@ class DefautContraste {
     required this.premierPlan,
     required this.fond,
     required this.rapport,
+    required this.seuil,
     required this.chemin,
     this.ancetres = '',
   });
@@ -280,7 +296,8 @@ class DefautContraste {
   @override
   String toString() {
     final base = '$chemin — $quoi : ${_hex(premierPlan)} sur ${_hex(fond)} '
-        '(contraste ${rapport.toStringAsFixed(2)}:1)';
+        '(contraste ${rapport.toStringAsFixed(2)}:1, '
+        'exigé ${seuil.toStringAsFixed(1)}:1)';
     if (ancetres.isEmpty) return base;
     return '$base\n      dans $ancetres';
   }

@@ -195,15 +195,20 @@ class _PhotoPlaceholder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Les initiales tenaient lieu de photo dans un disque teinté de bleu nuit,
+    // peintes de ce même bleu nuit : 1,1:1 en thème sombre, c'est-à-dire un
+    // disque vide. Même traitement qu'une pastille — le fond décide du texte.
+    final (fond, accent) = AppTheme.pastilleDe(context, AppTheme.primary);
+
     return Container(
-      color: AppTheme.primary.withValues(alpha: 0.1),
+      color: fond,
       child: Center(
         child: Text(
           initials,
           style: TextStyle(
             fontSize: 40,
             fontWeight: FontWeight.bold,
-            color: AppTheme.primary,
+            color: accent,
           ),
         ),
       ),
@@ -428,7 +433,8 @@ class _SectionCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(icon, color: AppTheme.primary),
+              Icon(icon,
+                  color: AppTheme.accentGraphique(context, AppTheme.primary)),
               const SizedBox(width: 12),
               Text(
                 title,
@@ -591,13 +597,13 @@ class _ErreurState extends StatelessWidget {
             Icon(
               Icons.error_rounded,
               size: 64,
-              color: AppTheme.error,
+              color: AppTheme.errorOf(context),
             ),
             const SizedBox(height: 16),
             Text(
               'Erreur de chargement',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: AppTheme.error,
+                color: AppTheme.errorOf(context),
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -610,13 +616,13 @@ class _ErreurState extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
+            // Sans surcharge de fond : le bleu nuit imposé ici privait le
+            // bouton du libellé clair que le thème sombre lui associe, et
+            // « Réessayer » retombait à 1,15:1.
             ElevatedButton.icon(
               onPressed: onRetry,
               icon: const Icon(Icons.refresh_rounded),
               label: const Text('Réessayer'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primary,
-              ),
             ),
           ],
         ),
