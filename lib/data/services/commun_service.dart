@@ -69,9 +69,18 @@ class CommunService extends ServiceApi {
   Future<List<Fiche>> categoriesBibliotheque(String universiteId) =>
       listeDe(ApiEndpoints.bibliothequeCategories(universiteId));
 
-  Future<Fiche> reserverOuvrage(String ouvrageId) => poster(
+  /// Réserve un ouvrage pour un étudiant.
+  ///
+  /// L'appel envoyait `{ouvrageId}` alors que le serveur exige `livreId` ET
+  /// `etudiantId`, et répond 400 si l'un manque : la réservation n'a jamais
+  /// fonctionné depuis l'application. Défaut antérieur aux corrections du
+  /// 03/09/2026, révélé en alignant le contrat.
+  ///
+  /// L'étudiant est désormais borné côté serveur (`peutAccederEtudiant`) :
+  /// réserver au nom d'un camarade laissait la dette et le retard sur lui.
+  Future<Fiche> reserverOuvrage(String livreId, String etudiantId) => poster(
         ApiEndpoints.bibliothequeReserver,
-        corps: {'ouvrageId': ouvrageId},
+        corps: {'livreId': livreId, 'etudiantId': etudiantId},
         contexte: 'La réservation a échoué.',
       );
 
@@ -128,8 +137,19 @@ class CommunService extends ServiceApi {
   Future<List<Fiche>> anneesAcademiques() =>
       listeDe(ApiEndpoints.anneesAcademiques);
 
-  Future<List<Fiche>> filieres(String universiteId) =>
-      listeDe(ApiEndpoints.filieresUniversite(universiteId));
+  /// Filières OUVERTES d'un établissement, quel qu'il soit.
+  ///
+  /// Visait `/api/filieres/universite/{id}`, réservée à l'administration —
+  /// l'étudiant recevait un 403 sur les deux sélecteurs du formulaire de
+  /// transfert, qui restait donc infranchissable. Ouvrir le rôle n'y aurait
+  /// rien changé : cette route porte en plus un contrôle explicite qui refuse
+  /// tout établissement autre que celui de l'appelant, or on demande ici les
+  /// filières de l'établissement d'ACCUEIL. La route publique ne rend que les
+  /// filières ouvertes — exactement la sémantique d'une destination.
+  Future<List<Fiche>> filieres(String universiteId) => listeDe(
+        ApiEndpoints.filieresDisponibles,
+        parametres: {'universiteId': universiteId},
+      );
 
   Future<List<Fiche>> promotionsDeFiliere(String filiereId) =>
       listeDe(ApiEndpoints.promotionsFiliere(filiereId));

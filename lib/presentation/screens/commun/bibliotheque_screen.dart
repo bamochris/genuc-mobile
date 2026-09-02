@@ -287,8 +287,20 @@ class _BibliothequeScreenState extends State<BibliothequeScreen>
   }
 
   Future<void> _reserver(Fiche ouvrage) async {
+    // Le serveur exige `livreId` ET `etudiantId` : l'appel n'envoyait que
+    // l'ouvrage et repartait en 400 — la réservation n'a jamais abouti depuis
+    // l'application. L'étudiant est celui qui est connecté, jamais un autre :
+    // le serveur le vérifie désormais.
+    final etudiantId = context.read<AuthProvider>().user?.id ?? '';
+    if (etudiantId.isEmpty) {
+      setState(() {
+        _message = 'Votre compte ne permet pas de réserver un ouvrage.';
+        _messageSucces = false;
+      });
+      return;
+    }
     try {
-      await context.read<CommunService>().reserverOuvrage(ouvrage.id);
+      await context.read<CommunService>().reserverOuvrage(ouvrage.id, etudiantId);
       if (!mounted) return;
       setState(() {
         _message = 'Réservation enregistrée pour « ${ouvrage.texte('titre')} ».';

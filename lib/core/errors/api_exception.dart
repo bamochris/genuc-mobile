@@ -44,6 +44,13 @@ class ApiException implements Exception {
           403 => 'Accès refusé',
           404 => 'Ressource introuvable',
           429 => 'Trop de tentatives. Réessayez dans quelques minutes.',
+          // Le serveur reconnaît la requête mais ne sait pas encore l'honorer :
+          // depuis le 03/09/2026 les modules qui ne persistent rien REFUSENT
+          // les écritures au lieu de répondre « enregistré » (LMS, évaluation
+          // des enseignants, emploi universitaire, réseau alumni). Le message
+          // détaillé vient du corps, lu plus haut ; ce repli ne sert que s'il
+          // est absent.
+          501 => 'Cette fonctionnalité n\'est pas encore disponible.',
           _ => 'Erreur serveur (${response?.statusCode})',
         },
       _ => 'Une erreur est survenue',

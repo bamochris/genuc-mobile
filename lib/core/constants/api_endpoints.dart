@@ -60,8 +60,11 @@ class ApiEndpoints {
       '$_portal/$inscriptionId/presences';
   static String etudiantExamens(String inscriptionId) =>
       '$_portal/$inscriptionId/examens';
-  static String etudiantEvaluations(String inscriptionId) =>
-      '$_portal/$inscriptionId/evaluations';
+  // `etudiantEvaluations` retiré le 03/09/2026 : `/portal/{id}/evaluations`
+  // n'a JAMAIS existé côté serveur — le portail n'expose que `/examens`. Le
+  // web appelait la même route inexistante et avalait le 404 dans un
+  // `.catch(() => ({ data: [] }))` : son écran « Évaluations » annonçait
+  // « aucune évaluation » indéfiniment. Utiliser [etudiantExamens].
   static String etudiantEvenements(String inscriptionId) =>
       '$_portal/$inscriptionId/evenements';
   static String etudiantParcours(String inscriptionId) =>
@@ -127,7 +130,17 @@ class ApiEndpoints {
   static String attestationPdf(String id) => '/api/attestations/$id/pdf';
   static String attestationsEtudiant(String inscriptionId) =>
       '/api/attestations/etudiant/$inscriptionId';
+  /// Dépôt d'une pièce par l'ADMINISTRATION : attend un `etudiantId`, que le
+  /// portail étudiant ne connaît pas — le jeton ne porte que l'inscription.
+  /// Le dépôt par l'étudiant lui-même passe par [documentsInscription].
   static const String documentsUpload = '/api/documents/upload';
+
+  /// Lecture ET dépôt des pièces d'une inscription.
+  ///
+  /// Le POST a été ajouté au serveur le 03/09/2026 : jusque-là, l'étudiant
+  /// n'avait aucune route pour téléverser. L'application envoyait son
+  /// `inscriptionId` au paramètre `etudiantId` de [documentsUpload], réservé à
+  /// l'administration — refusé deux fois, sur le rôle puis sur le paramètre.
   static String documentsInscription(String inscriptionId) =>
       '/api/documents/inscription/$inscriptionId';
   static String document(String id) => '/api/documents/$id';
@@ -179,7 +192,18 @@ class ApiEndpoints {
   static const String travauxSoumettre = '/api/travaux/soumettre';
 
   // ─── Présences (justification) ─────────────────────────────
+  /// L'ENSEIGNANT accorde la justification. Accepte depuis le 03/09/2026 un
+  /// corps `{motif}` — il était jusque-là purement ignoré, alors que
+  /// `motifAbsence` existe sur l'entité.
   static String presenceJustifier(String id) => '/api/presences/$id/justifier';
+
+  /// L'ÉTUDIANT motive son absence — il ne l'excuse pas.
+  ///
+  /// Route ajoutée au serveur le 03/09/2026. Jusque-là l'étudiant n'avait
+  /// aucun moyen de déposer un motif : le portail web appelait `/justifier`,
+  /// réservé à l'enseignant, et recevait un 403 après avoir imposé la saisie.
+  static String presenceJustification(String id) =>
+      '/api/presences/$id/justification';
 
   // ─── Équivalences de diplômes ──────────────────────────────
   static const String equivalences = '/api/equivalences';
@@ -187,8 +211,23 @@ class ApiEndpoints {
   // ─── Référentiel ───────────────────────────────────────────
   static const String universites = '/api/universites';
   static const String anneesAcademiques = '/api/annees-academiques';
+  /// Filières d'un établissement, pour l'ADMINISTRATION de cet établissement.
+  ///
+  /// Réservée à ADMIN_UNIVERSITE, CHEF_DEPARTEMENT et SECRETAIRE_ACADEMIQUE,
+  /// ET bornée à l'université de l'appelant par un contrôle explicite. Elle ne
+  /// peut donc pas servir à choisir un établissement d'ACCUEIL : voir
+  /// [filieresDisponibles].
   static String filieresUniversite(String universiteId) =>
       '/api/filieres/universite/$universiteId';
+
+  /// Filières OUVERTES d'un établissement quelconque (route publique).
+  ///
+  /// C'est celle qu'il faut pour un transfert ou un changement de filière :
+  /// la destination n'est par définition pas l'établissement de l'étudiant.
+  /// L'appel précédent partait sur [filieresUniversite] et recevait un 403 —
+  /// et l'ouvrir au rôle ÉTUDIANT n'y aurait rien changé, le contrôle
+  /// d'établissement de cette route l'aurait refusé ensuite.
+  static const String filieresDisponibles = '/api/filieres/public/disponibles';
   static String promotionsFiliere(String filiereId) =>
       '/api/promotions/filiere/$filiereId';
   static String promotionsUniversite(String universiteId) =>

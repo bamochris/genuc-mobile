@@ -126,10 +126,16 @@ class ProfesseurPedagogieService extends ServiceApi {
     required String cheminFichier,
     required String nomFichier,
   }) async {
+    // Le serveur lit `anneeAcademique` et `file` — ce formulaire envoyait
+    // `annee` et `fichier` : l'import repartait en 400 à chaque tentative,
+    // alors que l'analyse (juste en dessous) nommait les deux correctement.
+    // Défaut antérieur aux corrections du 03/09/2026, révélé en alignant le
+    // contrat. `professeurId` n'y figure plus : l'auteur de l'import est lu
+    // dans le jeton depuis que la route est bornée au cours.
     final formulaire = FormData.fromMap({
       'coursId': coursId,
-      'annee': annee,
-      'fichier': await MultipartFile.fromFile(
+      'anneeAcademique': annee,
+      'file': await MultipartFile.fromFile(
         cheminFichier,
         filename: nomFichier,
       ),
@@ -150,14 +156,17 @@ class ProfesseurPedagogieService extends ServiceApi {
   Future<Fiche> analyserFichierNotes({
     required String coursId,
     required String annee,
-    required String professeurId,
     required String cheminFichier,
     required String nomFichier,
   }) async {
+    // `professeurId` retiré : le serveur ne le lit plus. Il désignait l'auteur
+    // de l'import et arrivait du client, sur une route qui n'avait par ailleurs
+    // AUCUNE borne — un enseignant importait les notes de n'importe quel cours
+    // du pays. Elle est bornée au cours depuis le 03/09/2026, et l'auteur vient
+    // du jeton.
     final formulaire = FormData.fromMap({
       'coursId': coursId,
       'anneeAcademique': annee,
-      'professeurId': professeurId,
       'file': await MultipartFile.fromFile(cheminFichier, filename: nomFichier),
     });
 

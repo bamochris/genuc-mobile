@@ -85,10 +85,12 @@ class PublicationsScreen extends StatelessWidget {
           type: TypeChamp.multiligne,
         ),
       ],
-      onCreer: (valeurs) => service.ajouterPublication({
-        ...valeurs,
-        'professeurId': professeurId,
-      }),
+      // `professeurId` retire du corps : le serveur lisait l'auteur de la
+      // fiche DANS LA REQUETE, ainsi que son nom d'affichage. Les deux champs
+      // de l'attribution etaient donc a la main de l'appelant, et un
+      // enseignant pouvait publier au nom d'un collegue. L'auteur vient du
+      // jeton depuis le 03/09/2026.
+      onCreer: (valeurs) => service.ajouterPublication(valeurs),
     );
   }
 
@@ -173,10 +175,12 @@ class ProjetsRechercheScreen extends StatelessWidget {
           },
         ),
       ],
-      onCreer: (valeurs) => service.ajouterProjet({
-        ...valeurs,
-        'professeurId': professeurId,
-      }),
+      // `professeurId` retire du corps : le serveur lisait l'auteur de la
+      // fiche DANS LA REQUETE, ainsi que son nom d'affichage. Les deux champs
+      // de l'attribution etaient donc a la main de l'appelant, et un
+      // enseignant pouvait publier au nom d'un collegue. L'auteur vient du
+      // jeton depuis le 03/09/2026.
+      onCreer: (valeurs) => service.ajouterProjet(valeurs),
     );
   }
 
@@ -243,10 +247,12 @@ class ConferencesScreen extends StatelessWidget {
         ChampFormulaire(cle: 'organisateur', libelle: 'Organisateur'),
         ChampFormulaire(cle: 'lien', libelle: 'Lien'),
       ],
-      onCreer: (valeurs) => service.ajouterConference({
-        ...valeurs,
-        'professeurId': professeurId,
-      }),
+      // `professeurId` retire du corps : le serveur lisait l'auteur de la
+      // fiche DANS LA REQUETE, ainsi que son nom d'affichage. Les deux champs
+      // de l'attribution etaient donc a la main de l'appelant, et un
+      // enseignant pouvait publier au nom d'un collegue. L'auteur vient du
+      // jeton depuis le 03/09/2026.
+      onCreer: (valeurs) => service.ajouterConference(valeurs),
     );
   }
 
@@ -320,10 +326,12 @@ class LaboratoiresScreen extends StatelessWidget {
           },
         ),
       ],
-      onCreer: (valeurs) => service.ajouterLaboratoire({
-        ...valeurs,
-        'professeurId': professeurId,
-      }),
+      // `professeurId` retire du corps : le serveur lisait l'auteur de la
+      // fiche DANS LA REQUETE, ainsi que son nom d'affichage. Les deux champs
+      // de l'attribution etaient donc a la main de l'appelant, et un
+      // enseignant pouvait publier au nom d'un collegue. L'auteur vient du
+      // jeton depuis le 03/09/2026.
+      onCreer: (valeurs) => service.ajouterLaboratoire(valeurs),
     );
   }
 

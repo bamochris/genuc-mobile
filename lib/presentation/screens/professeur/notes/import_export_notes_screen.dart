@@ -245,10 +245,11 @@ class _ImportNotesScreenState extends State<ImportNotesScreen> {
     });
 
     try {
+      // `professeurId` retire : la route est bornee au cours et lit l'auteur
+      // dans le jeton.
       final rapport = await _service.analyserFichierNotes(
         coursId: coursId,
         annee: _annee,
-        professeurId: _professeurId,
         cheminFichier: fichier.chemin,
         nomFichier: fichier.nom,
       );

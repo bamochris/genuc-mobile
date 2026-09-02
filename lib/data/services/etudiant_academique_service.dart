@@ -1,3 +1,5 @@
+import 'dart:collection';
+
 import 'package:dio/dio.dart';
 
 import '../../core/constants/api_endpoints.dart';
@@ -39,11 +41,23 @@ class EtudiantAcademiqueService extends ServiceApi {
         contexte: 'Vos présences n\'ont pas pu être chargées.',
       );
 
-  // Pas de `justifierAbsence` ici : `PATCH /api/presences/{id}/justifier` est
-  // gardé `hasAnyRole('PROFESSEUR','CHEF_DEPARTEMENT','ADMIN_UNIVERSITE')`.
-  // Le portail web l'appelle pourtant depuis la page étudiant — l'étudiant y
-  // reçoit donc toujours un 403. La justification appartient à l'enseignant :
-  // voir `ProfesseurPedagogieService.justifierPresence`.
+  /// L'étudiant MOTIVE son absence — il ne l'excuse pas.
+  ///
+  /// Ce service n'exposait rien de tel, et le commentaire qui l'expliquait
+  /// avait raison : `PATCH /{id}/justifier` est gardé
+  /// `hasAnyRole('PROFESSEUR','CHEF_DEPARTEMENT','ADMIN_UNIVERSITE')`, et le
+  /// portail web l'appelait pourtant depuis sa page étudiant — 403 à chaque
+  /// fois, après avoir imposé la saisie d'un motif que le serveur ne lisait
+  /// dans aucun paramètre.
+  ///
+  /// Le serveur distingue les deux gestes depuis le 03/09/2026 : ici `justifie`
+  /// reste faux, seul l'enseignant tranche. Voir
+  /// `ProfesseurPedagogieService.justifierPresence` pour le second geste.
+  Future<Fiche> motiverAbsence(String presenceId, String motif) => poster(
+        ApiEndpoints.presenceJustification(presenceId),
+        corps: {'motif': motif},
+        contexte: 'Le motif n\'a pas pu être enregistré.',
+      );
 
   Future<List<Fiche>> examens(String inscriptionId) =>
       listeDe(ApiEndpoints.etudiantExamens(inscriptionId));
@@ -58,10 +72,19 @@ class EtudiantAcademiqueService extends ServiceApi {
       ApiEndpoints.etudiantAnneesDisponibles(inscriptionId),
     );
     // La route rend soit des chaînes, soit des objets `{annee: ...}`.
-    return fiches
-        .map((f) => f.texte('annee', alias: const ['libelle', 'valeur']))
-        .where((a) => a.isNotEmpty)
-        .toList();
+    //
+    // Dédoublonné, et ce n'est pas une précaution de style : la liste alimente
+    // un `DropdownButtonFormField`, qui EXIGE une valeur unique et lève une
+    // assertion — écran blanc — dès que deux entrées se répètent. Or rien ne
+    // garantit l'unicité côté serveur : la route dérive les années des
+    // inscriptions, et un étudiant réinscrit la même année en rend deux.
+    // `LinkedHashSet` préserve l'ordre du serveur, qui porte du sens (la plus
+    // récente d'abord, choisie par défaut).
+    return LinkedHashSet<String>.from(
+      fiches
+          .map((f) => f.texte('annee', alias: const ['libelle', 'valeur']))
+          .where((a) => a.isNotEmpty),
+    ).toList();
   }
 
   Future<List<Fiche>> bulletins(String inscriptionId, {String? annee}) => listeDe(
@@ -249,17 +272,22 @@ class EtudiantAcademiqueService extends ServiceApi {
     required String cheminFichier,
     required String nomFichier,
   }) async {
+    // Trois défauts empilés jusqu'au 03/09/2026, chacun suffisant :
+    //   - `documentsUpload` est la route de l'ADMINISTRATION ;
+    //   - elle attend un `etudiantId`, pas un `inscriptionId` ;
+    //   - et le fichier s'y nomme `file`, pas `fichier`.
+    // La route ci-dessous porte l'inscription dans le chemin et résout
+    // l'étudiant côté serveur : il n'y a plus rien à deviner.
     final formulaire = FormData.fromMap({
-      'inscriptionId': inscriptionId,
       'type': type,
-      'fichier': await MultipartFile.fromFile(
+      'file': await MultipartFile.fromFile(
         cheminFichier,
         filename: nomFichier,
       ),
     });
 
     return poster(
-      ApiEndpoints.documentsUpload,
+      ApiEndpoints.documentsInscription(inscriptionId),
       corps: formulaire,
       contexte: 'Le document n\'a pas pu être téléversé.',
     );
@@ -377,14 +405,15 @@ class EtudiantAcademiqueService extends ServiceApi {
     );
   }
 
-  // `DELETE /api/equivalences/{id}` exige `userId` en paramètre de requête :
-  // sans lui, la garde `peutAccederUtilisateur` ne peut pas s'appliquer et le
-  // contrôleur renvoie 400.
-  Future<void> annulerEquivalence(String id, {required String utilisateurId}) =>
-      supprimer(
-        ApiEndpoints.equivalence(id),
-        parametres: {'userId': utilisateurId},
-      );
+  /// Annule une demande d'équivalence encore en attente.
+  ///
+  /// Le `userId` que cet appel transmettait est retiré. Le serveur le lisait en
+  /// paramètre de requête et le comparait au propriétaire de la demande : les
+  /// DEUX membres venaient donc de l'appelant, et la comparaison réussissait
+  /// dès qu'il désignait correctement sa victime — un contrôle qui n'en était
+  /// pas un. Depuis le 03/09/2026, l'acteur est lu dans le jeton.
+  Future<void> annulerEquivalence(String id) =>
+      supprimer(ApiEndpoints.equivalence(id));
 
   /// Recours contre une délibération. Distinct de [recours] : celui-ci porte
   /// sur une décision de jury, l'autre sur une note.

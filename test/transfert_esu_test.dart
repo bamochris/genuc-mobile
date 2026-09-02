@@ -282,7 +282,12 @@ class _ServeurCanne implements HttpClientAdapter {
         {'id': 2, 'nom': 'Université de Lubumbashi'},
       ]);
     }
-    if (chemin == '/api/filieres/universite/1') {
+    // Route PUBLIQUE des filières ouvertes. Le service visait
+    // `/api/filieres/universite/{id}`, réservée à l'administration ET bornée à
+    // l'établissement de l'appelant : l'étudiant y recevait un 403, et le
+    // formulaire de transfert — qui demande les filières de l'établissement
+    // d'ACCUEIL — n'aurait de toute façon jamais pu s'en servir.
+    if (chemin == '/api/filieres/public/disponibles') {
       return _json([
         {'id': 4, 'nom': 'Droit privé'},
         {'id': 9, 'nom': 'Sciences économiques'},

@@ -694,8 +694,10 @@ class EquivalencesScreen extends StatelessWidget {
             LigneDetail(libelle: 'Motif de décision', valeur: f.texte('decisionMotif')),
         ],
       ),
-      onSupprimer: (fiche) =>
-          service.annulerEquivalence(fiche.id, utilisateurId: utilisateurId),
+      // `utilisateurId` n'est plus transmis : le serveur le comparait au
+      // proprietaire de la demande alors qu'il venait, lui aussi, de
+      // l'appelant. L'acteur est lu dans le jeton.
+      onSupprimer: (fiche) => service.annulerEquivalence(fiche.id),
       champsCreation: [
         const ChampFormulaire(
           cle: 'diplomeObtenu',
