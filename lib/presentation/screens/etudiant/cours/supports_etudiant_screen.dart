@@ -5,6 +5,7 @@ import '../../../../core/errors/api_exception.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/formatters.dart';
 import '../../../../core/utils/responsive.dart';
+import '../../../../data/models/etudiant/seance_support.dart';
 import '../../../../data/services/appel_api.dart';
 import '../../../../data/services/etudiant_academique_service.dart';
 import '../../../../data/services/supports_cours.dart';
@@ -371,6 +372,7 @@ class _LigneSupport extends StatelessWidget {
     final description = support.texte('description');
     final creeLe = support.date('creeLe');
     final taille = support.donnees['tailleOctets'];
+    final seance = SeanceSupport.depuis(support);
 
     return InkWell(
       borderRadius: BorderRadius.circular(10),
@@ -421,6 +423,44 @@ class _LigneSupport extends StatelessWidget {
                       color: AppTheme.textMutedOf(context),
                     ),
                   ),
+                  // Jusqu'ou l'enseignant est alle dans ce document.
+                  //
+                  // L'etudiant voit la borne ET peut lire tout le fichier : le
+                  // lecteur du telephone ouvre le PDF entier. C'est dit en
+                  // toutes lettres, parce qu'une borne sans explication se lit
+                  // comme une interdiction.
+                  if (seance != null) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      'Séance en cours : pages ${seance.debut} à ${seance.fin}'
+                      '${seance.nombrePages != null ? ' sur ${seance.nombrePages}' : ''}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.statutBleu,
+                      ),
+                    ),
+                    Text(
+                      'Vous pouvez lire tout le document ; au-delà de la page '
+                      "${seance.fin}, cela n'a pas encore été enseigné.",
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: AppTheme.textMutedOf(context),
+                      ),
+                    ),
+                    if (seance.pourcentage != null) ...[
+                      const SizedBox(height: 4),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(3),
+                        child: LinearProgressIndicator(
+                          value: seance.pourcentage! / 100,
+                          minHeight: 5,
+                          backgroundColor:
+                              AppTheme.textMutedOf(context).withValues(alpha: 0.2),
+                        ),
+                      ),
+                    ],
+                  ],
                 ],
               ),
             ),
