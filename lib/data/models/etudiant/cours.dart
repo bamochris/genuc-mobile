@@ -1,10 +1,19 @@
 /// Modèle de données pour les cours.
 ///
 /// La liste `GET /api/etudiant/portal/{id}/cours` (`mesCoursAvecProgression`)
-/// renvoie `{id, titre, code, description, professeur, thumbnail, nbLecons,
-/// progression, estComplete, dateDernierAcces}`. Les champs de progression
-/// sont absents de l'entité brute `Cours` du backend : ils sont donc
-/// optionnels ici.
+/// renvoie `{id, titre, code, description, niveau, promotion, professeur,
+/// thumbnail, nbLecons, progression, estComplete, dateDernierAcces}`. Les
+/// champs de progression sont absents de l'entité brute `Cours` du backend :
+/// ils sont donc optionnels ici.
+///
+/// ⚠ Cette liste est désormais BORNÉE à la promotion de l'inscription côté
+/// serveur. Elle rendait auparavant tout le catalogue de l'établissement — un
+/// étudiant de L1 y lisait les cours de L3 — et l'application n'avait, ici,
+/// aucun moyen de faire la différence.
+///
+/// `niveau` et `promotion` viennent de cette correction. Le champ `filiere`
+/// retombait sur `niveau` faute de mieux : il annonçait une filière en
+/// affichant un niveau, deux notions que la hiérarchie ESU distingue.
 class Cours {
   final int id;
   final String code;
@@ -15,6 +24,8 @@ class Cours {
   final String? semestre;
   final String? anneeAcademique;
   final String? filiere;
+  final String? niveau;
+  final String? promotion;
   final int? ueId;
   final String? ueCode;
 
@@ -34,6 +45,8 @@ class Cours {
     this.semestre,
     this.anneeAcademique,
     this.filiere,
+    this.niveau,
+    this.promotion,
     this.ueId,
     this.ueCode,
     this.nbLecons,
@@ -52,7 +65,9 @@ class Cours {
       enseignant: json['enseignant'] ?? json['professeur'],
       semestre: json['semestre'],
       anneeAcademique: json['anneeAcademique'],
-      filiere: json['filiere'] ?? json['niveau'],
+      filiere: json['filiere'],
+      niveau: json['niveau'],
+      promotion: json['promotion'],
       ueId: json['ueId'],
       ueCode: json['ueCode'],
       nbLecons: json['nbLecons'],

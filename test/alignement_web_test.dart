@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:genuc_mobile/data/models/etudiant/cours.dart';
 import 'package:genuc_mobile/data/services/appel_api.dart';
 import 'package:genuc_mobile/presentation/screens/etudiant/demarches/demarches_screens.dart';
 
@@ -232,6 +233,44 @@ void main() {
         'taille': 12,
       };
       expect(deballerReponse(objet), same(objet));
+    });
+  });
+
+  group('Mes cours — le périmètre vient du serveur', () {
+    /// Charge utile d'un élément de `GET /api/etudiant/portal/{id}/cours`
+    /// (`mesCoursAvecProgression`), telle qu'elle est servie depuis le
+    /// bornage à la promotion de l'inscription.
+    const coursServi = {
+      'id': 100,
+      'titre': 'Algorithmique',
+      'code': 'INFO-101',
+      'description': 'Bases de la programmation',
+      'niveau': 'L1',
+      'promotion': 'L1',
+      'professeur': 'Mbuyi Kalala',
+      'thumbnail': null,
+      'nbLecons': 12,
+      'progression': 25,
+      'estComplete': false,
+      'dateDernierAcces': null,
+    };
+
+    test('le niveau et la promotion se lisent sur les noms servis', () {
+      // Aucun des deux n'était rendu par le serveur : le mobile n'avait aucun
+      // moyen de dire de quelle promotion relevait un cours — et la liste,
+      // elle, portait tout le catalogue de l'établissement.
+      final cours = Cours.fromJson(coursServi);
+      expect(cours.niveau, 'L1');
+      expect(cours.promotion, 'L1');
+      expect(cours.enseignant, 'Mbuyi Kalala');
+    });
+
+    test('le niveau ne se fait plus passer pour une filière', () {
+      // `filiere: json['filiere'] ?? json['niveau']` annonçait une filière en
+      // affichant un niveau. La hiérarchie ESU les distingue : une filière
+      // appartient à un département, un niveau traverse toutes les filières.
+      final cours = Cours.fromJson(coursServi);
+      expect(cours.filiere, isNull);
     });
   });
 }
