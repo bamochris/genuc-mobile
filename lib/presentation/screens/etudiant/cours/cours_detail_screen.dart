@@ -173,6 +173,10 @@ class _Contenu extends StatelessWidget {
         children: [
           _EnTeteCours(detail: detail),
           const SizedBox(height: 16),
+          if (detail.avancement != null) ...[
+            _AvancementDuCours(avancement: detail.avancement!),
+            const SizedBox(height: 16),
+          ],
           if (supports.isNotEmpty) ...[
             SectionCard(
               title: 'Supports de cours (${supports.length})',
@@ -200,23 +204,15 @@ class _Contenu extends StatelessWidget {
             ),
             const SizedBox(height: 16),
           ],
+          // Les lecons en ligne sont un CONTENU facultatif : beaucoup de cours
+          // n'en ont aucun. L'avancement, lui, est affiche plus haut et ne
+          // depend pas d'elles — il se lit des presences.
+          if (detail.lecons.isNotEmpty)
           SectionCard(
-            // Le denominateur est ce que le PROFESSEUR a ouvert, pas la
-            // totalite du cours : un etudiant ayant fait tout ce qu'on lui
-            // demandait lisait « 2/12 » et se croyait en retard.
-            title: 'Leçons (${detail.leconsCompletees}/${detail.leconsOuvertes}'
-                '${detail.totalLecons > detail.leconsOuvertes ? ' ouvertes sur ${detail.totalLecons}' : ''})',
+            title: 'Leçons en ligne '
+                '(${detail.leconsCompletees}/${detail.leconsOuvertes})',
             icon: Icons.play_circle_rounded,
-            children: detail.lecons.isEmpty
-                ? [
-                    Text(
-                      'Aucune leçon publiée pour ce cours.',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: AppTheme.textSecondaryOf(context),
-                          ),
-                    ),
-                  ]
-                : detail.lecons
+            children: detail.lecons
                     .map(
                       (l) => _LeconTile(
                         lecon: l,
@@ -227,6 +223,82 @@ class _Contenu extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Ou en est le cours : les seances tenues par l'enseignant.
+///
+/// Ce bloc ne demande RIEN a l'etudiant. Le professeur prend les presences a
+/// chaque seance ; le nombre de jours distincts ou il l'a fait est
+/// l'avancement. La version precedente calculait une barre sur des lecons que
+/// l'enseignant devait saisir a la main et que l'etudiant devait cocher :
+/// personne ne le faisait, donc elle restait a zero.
+class _AvancementDuCours extends StatelessWidget {
+  const _AvancementDuCours({required this.avancement});
+
+  final AvancementCours avancement;
+
+  @override
+  Widget build(BuildContext context) {
+    final pct = avancement.pourcentage;
+    final secondaire = AppTheme.textSecondaryOf(context);
+
+    return SectionCard(
+      title: 'Où en est le cours',
+      icon: Icons.timeline_rounded,
+      children: [
+        if (!avancement.aCommence)
+          Text(
+            "Ce cours n'a pas encore commencé.",
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: secondaire),
+          )
+        else ...[
+          if (pct != null) ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '${avancement.seancesTenues} séance(s) sur ${avancement.seancesPrevues}',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+                Text(
+                  '$pct %',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(5),
+              child: LinearProgressIndicator(
+                value: pct / 100,
+                minHeight: 8,
+                backgroundColor: secondaire.withValues(alpha: 0.18),
+              ),
+            ),
+          ] else
+            // Sans volume horaire exploitable, on affiche le compte et rien de
+            // plus : un pourcentage invente vaut moins qu'un chiffre honnete.
+            Text(
+              '${avancement.seancesTenues} séance(s) déjà couverte(s)',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+          if (avancement.seancesSuivies != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Vous étiez présent à ${avancement.seancesSuivies} séance(s) sur ${avancement.seancesTenues}',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: secondaire),
+            ),
+          ],
+        ],
+      ],
     );
   }
 }

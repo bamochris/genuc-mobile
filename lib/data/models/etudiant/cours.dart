@@ -170,6 +170,55 @@ class Lecon {
   }
 }
 
+/// Ou en est le COURS : les seances tenues par l'enseignant.
+///
+/// Rien n'est saisi pour produire ces chiffres, ni par le professeur ni par
+/// l'etudiant. Le professeur prend les presences a chaque seance ; le nombre de
+/// jours distincts ou il l'a fait est l'avancement du cours.
+///
+/// Cela remplace la barre calculee sur les lecons cochees : elle exigeait que
+/// l'enseignant saisisse une liste de lecons, deplace un curseur d'ouverture,
+/// et que l'etudiant coche chaque lecon. Personne ne le faisait, donc elle
+/// restait a zero.
+class AvancementCours {
+  /// Seances deja tenues, tous etudiants confondus.
+  final int seancesTenues;
+
+  /// Seances prevues. `null` quand le volume horaire ne permet pas de le dire :
+  /// on affiche alors un compte, jamais un pourcentage invente.
+  final int? seancesPrevues;
+
+  /// Avancement en pourcentage, plafonne a 100. `null` si indeterminable.
+  final int? pourcentage;
+
+  /// Seances ou CET etudiant a ete porte present.
+  final int? seancesSuivies;
+
+  /// Date de la derniere seance tenue, telle que le serveur l'envoie.
+  final String? derniereSeance;
+
+  const AvancementCours({
+    required this.seancesTenues,
+    this.seancesPrevues,
+    this.pourcentage,
+    this.seancesSuivies,
+    this.derniereSeance,
+  });
+
+  static int? _entier(dynamic v) => v is num ? v.toInt() : null;
+
+  factory AvancementCours.fromJson(Map<String, dynamic> json) => AvancementCours(
+        seancesTenues: _entier(json['seancesTenues']) ?? 0,
+        seancesPrevues: _entier(json['seancesPrevues']),
+        pourcentage: _entier(json['pourcentage']),
+        seancesSuivies: _entier(json['seancesSuivies']),
+        derniereSeance: json['derniereSeance'] as String?,
+      );
+
+  /// Le cours a-t-il commence ?
+  bool get aCommence => seancesTenues > 0;
+}
+
 class CoursDetail {
   final Cours cours;
   final List<Lecon> lecons;
@@ -178,7 +227,12 @@ class CoursDetail {
   final List<String> prerequis;
   final List<String> objectifs;
 
+  /// Ou en est le cours. `null` si le serveur ne l'envoie pas encore : on
+  /// n'invente pas un avancement que personne n'a calcule.
+  final AvancementCours? avancement;
+
   CoursDetail({
+    this.avancement,
     this.leconsOuvertesServeur,
     required this.cours,
     required this.lecons,
@@ -205,6 +259,9 @@ class CoursDetail {
       progression: (json['progression'] ?? 0).toDouble(),
       leconsOuvertesServeur: json['leconsOuvertes'] is num
           ? (json['leconsOuvertes'] as num).toInt()
+          : null,
+      avancement: json['avancement'] is Map<String, dynamic>
+          ? AvancementCours.fromJson(json['avancement'] as Map<String, dynamic>)
           : null,
       descriptionComplete: json['descriptionComplete'],
       prerequis: (json['prerequis'] as List?)?.cast<String>() ?? [],
