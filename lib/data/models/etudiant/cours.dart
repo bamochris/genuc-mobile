@@ -110,6 +110,14 @@ class Lecon {
   final int? dureeSecondes;
   final bool apercuGratuit;
 
+  /// Le professeur a-t-il ouvert cette lecon ?
+  ///
+  /// Une lecon fermee reste LISIBLE — l'etudiant peut prendre de l'avance —
+  /// mais elle ne compte pas dans sa progression. Absent de la reponse
+  /// (serveur pas encore a jour) vaut « ouverte » : on n'invente pas une
+  /// restriction que le serveur n'a pas exprimee.
+  final bool ouverte;
+
   Lecon({
     required this.id,
     required this.titre,
@@ -124,6 +132,7 @@ class Lecon {
     this.dureeMinutes,
     this.dureeSecondes,
     this.apercuGratuit = false,
+    this.ouverte = true,
   });
 
   factory Lecon.fromJson(Map<String, dynamic> json) {
@@ -146,6 +155,7 @@ class Lecon {
       dureeMinutes: json['dureeMinutes'],
       dureeSecondes: json['dureeSecondes'],
       apercuGratuit: json['apercuGratuit'] ?? false,
+      ouverte: json['ouverte'] ?? true,
     );
   }
 
@@ -169,6 +179,7 @@ class CoursDetail {
   final List<String> objectifs;
 
   CoursDetail({
+    this.leconsOuvertesServeur,
     required this.cours,
     required this.lecons,
     required this.progression,
@@ -192,12 +203,30 @@ class CoursDetail {
       cours: cours,
       lecons: leconsList,
       progression: (json['progression'] ?? 0).toDouble(),
+      leconsOuvertesServeur: json['leconsOuvertes'] is num
+          ? (json['leconsOuvertes'] as num).toInt()
+          : null,
       descriptionComplete: json['descriptionComplete'],
       prerequis: (json['prerequis'] as List?)?.cast<String>() ?? [],
       objectifs: (json['objectifs'] as List?)?.cast<String>() ?? [],
     );
   }
 
-  int get leconsCompletees => lecons.where((l) => l.estComplete).length;
+  /// Lecons OUVERTES par le professeur — le denominateur de la barre.
+  ///
+  /// Le serveur le renvoie deja calcule ; a defaut, on retombe sur les lecons
+  /// marquees ouvertes, puis sur leur totalite.
+  final int? leconsOuvertesServeur;
+
+  int get leconsOuvertes =>
+      leconsOuvertesServeur ?? lecons.where((l) => l.ouverte).length;
+
+  /// Lecons ouvertes deja terminees — le numerateur.
+  ///
+  /// Ce qui est lu en avance ne compte ni ici ni au denominateur : la barre
+  /// mesure ce qu'on demande a l'etudiant, pas ce que le cours contiendra.
+  int get leconsCompletees =>
+      lecons.where((l) => l.ouverte && l.estComplete).length;
+
   int get totalLecons => lecons.length;
 }

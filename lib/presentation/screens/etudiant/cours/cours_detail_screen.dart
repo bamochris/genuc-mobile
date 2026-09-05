@@ -201,7 +201,11 @@ class _Contenu extends StatelessWidget {
             const SizedBox(height: 16),
           ],
           SectionCard(
-            title: 'Leçons (${detail.leconsCompletees}/${detail.totalLecons})',
+            // Le denominateur est ce que le PROFESSEUR a ouvert, pas la
+            // totalite du cours : un etudiant ayant fait tout ce qu'on lui
+            // demandait lisait « 2/12 » et se croyait en retard.
+            title: 'Leçons (${detail.leconsCompletees}/${detail.leconsOuvertes}'
+                '${detail.totalLecons > detail.leconsOuvertes ? ' ouvertes sur ${detail.totalLecons}' : ''})',
             icon: Icons.play_circle_rounded,
             children: detail.lecons.isEmpty
                 ? [
@@ -388,7 +392,12 @@ class _LeconTile extends StatelessWidget {
     return InkWell(
       onTap: lecon.estComplete ? null : onMarquerComplete,
       borderRadius: BorderRadius.circular(8),
-      child: Padding(
+      child: Opacity(
+        // Une lecon que le professeur n'a pas encore ouverte reste LISIBLE et
+        // cliquable — l'etudiant peut prendre de l'avance. Elle s'affiche
+        // seulement en retrait, et ne compte pas dans la barre.
+        opacity: lecon.ouverte ? 1 : 0.6,
+        child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 8),
         child: Row(
           children: [
@@ -399,7 +408,8 @@ class _LeconTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '${lecon.ordre}. ${lecon.titre}',
+                    '${lecon.ordre}. ${lecon.titre}'
+                    '${lecon.ouverte ? '' : '  🔒'}',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           fontWeight: FontWeight.w600,
                           decoration: lecon.estComplete
@@ -408,6 +418,16 @@ class _LeconTile extends StatelessWidget {
                           decorationColor: AppTheme.textSecondaryOf(context),
                         ),
                   ),
+                  if (!lecon.ouverte) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      'Pas encore ouverte — ne compte pas dans votre progression',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: AppTheme.textSecondaryOf(context),
+                            fontSize: 11,
+                          ),
+                    ),
+                  ],
                   if (lecon.dureeAffichee.isNotEmpty ||
                       lecon.description != null) ...[
                     const SizedBox(height: 2),
@@ -438,6 +458,7 @@ class _LeconTile extends StatelessWidget {
                 onPressed: onMarquerComplete,
               ),
           ],
+        ),
         ),
       ),
     );
