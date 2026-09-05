@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../../core/errors/api_exception.dart';
 import '../../../../core/theme/app_theme.dart';
-import '../../../../core/utils/fichiers.dart';
 import '../../../../data/services/appel_api.dart';
 import '../../../../data/services/etudiant_academique_service.dart';
+import '../../../../data/services/supports_cours.dart';
 import '../../../../data/models/etudiant/cours.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/student_provider.dart';
@@ -27,12 +28,12 @@ class CoursDetailScreen extends StatefulWidget {
 }
 
 class _CoursDetailScreenState extends State<CoursDetailScreen> {
-  /// Supports déposés par l'enseignant.
+  /// Supports déposés par l'enseignant sur CE cours.
   ///
-  /// Ils étaient publiés depuis le portail professeur et n'avaient AUCUN
-  /// écran côté étudiant — ni web ni mobile : personne ne pouvait les lire.
-  /// `GET /api/cours/{id}/supports` est pourtant ouvert à tout compte de
-  /// l'établissement.
+  /// Cet écran ne couvre que les cours publiés au catalogue en ligne. Les
+  /// supports des cours de l'emploi du temps se lisent depuis
+  /// `SupportsEtudiantScreen` (`/etudiant/supports`), qui part des séances de
+  /// l'inscription — le seul chemin qui les relie à l'étudiant.
   List<Fiche> _supports = const [];
 
   @override
@@ -59,6 +60,26 @@ class _CoursDetailScreenState extends State<CoursDetailScreen> {
       if (mounted) setState(() => _supports = supports);
     } catch (_) {
       if (mounted) setState(() => _supports = const []);
+    }
+  }
+
+  /// Télécharge le support avec le jeton, puis le confie au lecteur système.
+  Future<void> _ouvrirSupport(Fiche support) async {
+    final academique = context.read<EtudiantAcademiqueService>();
+    final messager = ScaffoldMessenger.of(context);
+    messager
+      ..hideCurrentSnackBar()
+      ..showSnackBar(const SnackBar(
+        content: Text('Ouverture du support…'),
+        duration: Duration(seconds: 2),
+      ));
+    try {
+      await academique.ouvrirSupport(support);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      messager
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(e.message)));
     }
   }
 
@@ -118,6 +139,7 @@ class _CoursDetailScreenState extends State<CoursDetailScreen> {
                       detail: studentProvider.coursDetail!,
                       onMarquerComplete: _marquerComplete,
                       supports: _supports,
+                      onOuvrirSupport: _ouvrirSupport,
                     )
                   : const EtatVide(
                       icon: Icons.menu_book_rounded,
@@ -131,10 +153,12 @@ class _Contenu extends StatelessWidget {
   final CoursDetail detail;
   final void Function(Lecon) onMarquerComplete;
   final List<Fiche> supports;
+  final void Function(Fiche) onOuvrirSupport;
 
   const _Contenu({
     required this.detail,
     required this.onMarquerComplete,
+    required this.onOuvrirSupport,
     this.supports = const [],
   });
 
@@ -155,7 +179,10 @@ class _Contenu extends StatelessWidget {
               icon: Icons.attach_file_rounded,
               children: [
                 for (final support in supports)
-                  _LigneSupport(support: support),
+                  _LigneSupport(
+                    support: support,
+                    onOuvrir: () => onOuvrirSupport(support),
+                  ),
               ],
             ),
             const SizedBox(height: 16),
@@ -200,24 +227,29 @@ class _Contenu extends StatelessWidget {
   }
 }
 
-/// Un support : on l'ouvre, le système choisit l'application.
+/// Un support : on le télécharge, puis le système choisit l'application.
+///
+/// L'ancien code passait `support.url` — le chemin de STOCKAGE, sans schéma ni
+/// hôte — au lanceur système, qui ne pouvait rien en faire ; son échec ne
+/// remontait qu'un `false` que personne ne lisait. Aucun support ne s'est
+/// jamais ouvert depuis cet écran.
 class _LigneSupport extends StatelessWidget {
   final Fiche support;
+  final VoidCallback onOuvrir;
 
-  const _LigneSupport({required this.support});
+  const _LigneSupport({required this.support, required this.onOuvrir});
 
   @override
   Widget build(BuildContext context) {
     final titre = support.texte('titre',
         alias: const ['nomFichierOriginal'], defaut: 'Support');
     final description = support.texte('description');
-    final url = support.texte('url');
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: InkWell(
         borderRadius: BorderRadius.circular(10),
-        onTap: url.isEmpty ? null : () => Fichiers.ouvrirLien(url),
+        onTap: onOuvrir,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
           child: Row(

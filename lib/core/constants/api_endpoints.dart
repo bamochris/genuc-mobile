@@ -34,6 +34,14 @@ class ApiEndpoints {
       '$_portal/$inscriptionId/cours';
   static String etudiantCoursDetail(String inscriptionId, String coursId) =>
       '$_portal/$inscriptionId/cours/$coursId';
+
+  /// Les supports des cours que l'étudiant SUIT — ceux de ses séances.
+  ///
+  /// `etudiantCours` ne rend que les cours PUBLIÉS du catalogue en ligne :
+  /// les cours de l'emploi du temps n'y figurent pas, et leurs supports
+  /// n'étaient donc atteignables par aucun chemin.
+  static String etudiantSupports(String inscriptionId) =>
+      '$_portal/$inscriptionId/supports';
   static String etudiantNotes(String inscriptionId) =>
       '$_portal/$inscriptionId/notes';
   static String etudiantReleve(String inscriptionId) =>
@@ -143,6 +151,17 @@ class ApiEndpoints {
   /// l'administration — refusé deux fois, sur le rôle puis sur le paramètre.
   static String documentsInscription(String inscriptionId) =>
       '/api/documents/inscription/$inscriptionId';
+
+  /// Les pièces que l'établissement exige de l'étudiant CONNECTÉ.
+  ///
+  /// Résolues côté serveur pour son inscription — université, filière,
+  /// promotion — par les mêmes règles cumulatives que l'aperçu du secrétariat.
+  /// Aucun identifiant à passer : le périmètre vient du jeton.
+  ///
+  /// Sans cette route, l'application écrivait sa propre liste de natures de
+  /// pièces, et ce que le secrétariat configurait n'atteignait jamais
+  /// l'étudiant.
+  static const String documentsRequisEtudiant = '/api/etudiant/documents-requis';
   static String document(String id) => '/api/documents/$id';
   static String carteEtudiantDe(String inscriptionId) =>
       '/api/carte-etudiant/$inscriptionId';
@@ -190,6 +209,21 @@ class ApiEndpoints {
 
   // ─── Travaux ───────────────────────────────────────────────
   static const String travauxSoumettre = '/api/travaux/soumettre';
+
+  // ─── Travaux (professeur) ──────────────────────────────────
+  static const String travaux = '/api/travaux';
+  static String travauxDuProfesseur(String professeurId) =>
+      '/api/travaux/professeur/$professeurId';
+  static String travailSoumissions(String travailId) =>
+      '/api/travaux/$travailId/soumissions';
+
+  /// Dépôt du fichier de consignes d'un travail (multipart).
+  static String travailConsignes(String travailId) =>
+      '/api/travaux/$travailId/consignes';
+
+  /// Correction d'une copie : note, appréciation et copie annotée (multipart).
+  static String soumissionCorriger(String soumissionId) =>
+      '/api/travaux/soumissions/$soumissionId/corriger';
 
   // ─── Présences (justification) ─────────────────────────────
   /// L'ENSEIGNANT accorde la justification. Accepte depuis le 03/09/2026 un
@@ -356,6 +390,15 @@ class ApiEndpoints {
   static String coursEtudiants(String coursId) => '/api/cours/$coursId/etudiants';
   static String coursSupports(String coursId) => '/api/cours/$coursId/supports';
   static String support(String supportId) => '/api/cours/supports/$supportId';
+
+  /// Le FICHIER d'un support, servi après contrôle d'accès.
+  ///
+  /// Le champ `url` d'un support porte son chemin de stockage
+  /// (`/uploads/supports/…`), que le serveur refuse et que `launchUrl` ne
+  /// saurait de toute façon pas ouvrir — il n'a ni schéma ni hôte. Le
+  /// téléchargement passe donc par cette route, avec le jeton.
+  static String supportFichier(String supportId) =>
+      '/api/cours/supports/$supportId/fichier';
 
   // ─── Notes (professeur) ────────────────────────────────────
   static String notesCours(String coursId, String annee) =>

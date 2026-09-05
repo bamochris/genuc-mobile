@@ -147,6 +147,134 @@ class ServeurSimule implements HttpClientAdapter {
       ]
     ),
 
+    // ─── Portail étudiant : les quatre lectures dont la FORME compte ───
+    //
+    // Ces routes ne rendent PAS un tableau nu, ou portent des clés que le
+    // générique n'a pas. Servies par la réponse par défaut, elles remplissaient
+    // l'écran d'éléments plausibles — et masquaient donc exactement ce qu'il
+    // fallait mesurer : l'écran des travaux paraissait rempli en test alors
+    // qu'il est vide en production (le serveur rend `{travaux: […]}`, jamais
+    // `content`), et les pastilles de statut des documents officiels ne
+    // s'affichaient sur aucune ligne.
+
+    // `TravauxService.mesTravaux` : un OBJET à deux clés, pas une liste.
+    (
+      RegExp(r'/api/etudiant/portal/\d+/travaux'),
+      {
+        'travaux': [
+          _travail(1, 'A_SOUMETTRE'),
+          _travail(2, 'EN_RETARD'),
+          _travail(3, 'SOUMIS'),
+          _travail(4, 'CORRIGE'),
+        ],
+        'coursList': [
+          {'id': 1, 'code': 'INFO-201', 'titre': 'Algorithmique'},
+        ],
+      }
+    ),
+
+    // Les copies rendues pour un travail, vues par l'enseignant.
+    (
+      RegExp(r'/api/travaux/\d+/soumissions'),
+      [
+        _copie(1, 'MUKENDI Espoir', '20260001', note: null),
+        _copie(2, 'KABILA Grâce', '20260002', note: 15.5),
+        _copie(3, 'ILUNGA Josué', '20260003', note: 8.0),
+      ]
+    ),
+
+    // Les travaux publiés par l'enseignant : leur cours, leur échéance et
+    // l'état des copies décident de ce que la carte affiche.
+    (
+      RegExp(r'/api/travaux/professeur/'),
+      [
+        _travailProfesseur(1, 'Devoir 1 — complexité', 'DEVOIR',
+            soumissions: 12, corrigees: 4, avecConsignes: true),
+        _travailProfesseur(2, 'TP 2 — tables de hachage', 'TP',
+            soumissions: 9, corrigees: 9, avecConsignes: false),
+      ]
+    ),
+
+    // `DocumentsOfficielsService.mapperDocument` : un catalogue, où chaque
+    // ligne porte son statut et ce que l'étudiant peut en faire.
+    (
+      RegExp(r'/api/etudiant/portal/\d+/documents-officiels'),
+      [
+        _documentOfficiel('CERTIFICAT_SCOLARITE', 'Certificat de scolarité',
+            'DISPONIBLE'),
+        _documentOfficiel('RELEVE_NOTES', 'Relevé de notes officiel',
+            'PAIEMENT_REQUIS'),
+        _documentOfficiel('ATTESTATION_REUSSITE', 'Attestation de réussite',
+            'DEMANDE_EN_COURS'),
+        _documentOfficiel('CERTIFICAT_INSCRIPTION', 'Certificat d\'inscription',
+            'A_DEMANDER'),
+      ]
+    ),
+
+    // Les supports, groupés par cours de l'emploi du temps.
+    (
+      RegExp(r'/api/etudiant/portal/\d+/supports'),
+      [
+        {
+          'coursId': 1,
+          'coursCode': 'INFO-201',
+          'coursTitre': 'Algorithmique et structures de données',
+          'professeurNom': 'Prof. KABEYA',
+          'nombreSupports': 2,
+          'seances': [
+            {
+              'id': 11,
+              'jour': 'MONDAY',
+              'heureDebut': '08:00:00',
+              'heureFin': '10:00:00',
+              'salleNom': 'Amphi B1',
+              'semestre': 'S1',
+            },
+            {
+              'id': 12,
+              'jour': 'THURSDAY',
+              'heureDebut': '14:00:00',
+              'heureFin': '16:00:00',
+              'salleNom': 'Labo 3',
+              'semestre': 'S1',
+            },
+          ],
+          'supports': [
+            _support(1, 'Chapitre 1 — Complexité', 'PDF'),
+            _support(2, 'Séance 3 — Tris', 'PPT'),
+          ],
+        },
+        {
+          'coursId': 2,
+          'coursCode': 'INFO-204',
+          'coursTitre': 'Bases de données relationnelles',
+          'professeurNom': 'Prof. MULUMBA',
+          'nombreSupports': 0,
+          'seances': [
+            {
+              'id': 21,
+              'jour': 'TUESDAY',
+              'heureDebut': '10:00:00',
+              'heureFin': '12:00:00',
+              'salleNom': 'Amphi A',
+            },
+          ],
+          'supports': <dynamic>[],
+        },
+      ]
+    ),
+
+    // Les pièces du dossier : c'est leur `url` de stockage qui décide si
+    // l'action « Ouvrir » s'affiche.
+    (
+      RegExp(r'/api/documents/inscription/\d+'),
+      [
+        _piece(1, 'CARTE_IDENTITE', 'carte_identite.pdf', 'VALIDE'),
+        _piece(2, 'DIPLOME', 'diplome_etat.pdf', 'EN_ATTENTE'),
+        _piece(3, 'PHOTO', 'photo.jpg', 'REJETE'),
+      ]
+    ),
+
     // ─── Compteurs de notification (badge de la barre du haut) ───
     (RegExp(r'/api/notifications/.*(count|non-lues)'), {'count': 3, 'total': 3}),
   ];
@@ -193,6 +321,148 @@ class ServeurSimule implements HttpClientAdapter {
         'semestre': ?semestre,
         'promotionLibelle': 'L2 Informatique',
         'vacationNom': 'Jour',
+      };
+
+  /// Un travail, avec la correction quand il est corrigé.
+  static Map<String, dynamic> _travail(int id, String statut) => {
+        'id': id,
+        'titre': 'Devoir $id — arbres équilibrés',
+        'description': 'Rendre un mémoire de quatre pages, exemples compris.',
+        'type': 'DEVOIR',
+        'cours': 'Algorithmique et structures de données',
+        'coursId': 1,
+        'professeur': 'Prof. KABEYA',
+        'dateEcheance': '2026-09-1${id % 10}T23:59:00',
+        'coefficient': 2.0,
+        'urlConsignes': '/uploads/travaux/consignes-$id.pdf',
+        'nomFichierConsignes': 'enonce-$id.pdf',
+        'urlTelechargementConsignes': '/api/fichiers/travaux/consignes-$id.pdf',
+        'statut': statut,
+        if (statut == 'SOUMIS' || statut == 'CORRIGE')
+          'dateSoumission': '2026-09-0${id % 10}T18:30:00',
+        if (statut == 'CORRIGE') ...{
+          'note': 15.5,
+          'urlCorrection': '/uploads/travaux/correction-$id.pdf',
+          'nomFichierCorrection': 'correction-$id.pdf',
+          'urlTelechargementCorrection': '/api/fichiers/travaux/correction-$id.pdf',
+          'commentaireCorrection':
+              'Raisonnement juste, rédaction à resserrer sur la partie 2.',
+        },
+      };
+
+  /// Un travail vu par l'enseignant qui l'a publié.
+  static Map<String, dynamic> _travailProfesseur(
+    int id,
+    String titre,
+    String type, {
+    required int soumissions,
+    required int corrigees,
+    required bool avecConsignes,
+  }) =>
+      {
+        'id': id,
+        'titre': titre,
+        'description': 'Rendre un mémoire de quatre pages, exemples compris.',
+        'type': type,
+        'dateEcheance': '2026-09-1$id' 'T23:59:00',
+        'coefficient': 2.0,
+        'anneeAcademique': '2026-2027',
+        'annule': false,
+        'coursId': 1,
+        'coursCode': 'INFO-201',
+        'coursTitre': 'Algorithmique et structures de données',
+        'professeurId': 1,
+        'professeurNom': 'Prof. KABEYA',
+        if (avecConsignes) ...{
+          'urlConsignes': '/uploads/travaux/consignes-$id.pdf',
+          'nomFichierConsignes': 'enonce-$id.pdf',
+          'urlTelechargementConsignes':
+              '/api/fichiers/travaux/consignes-$id.pdf',
+        },
+        'nombreSoumissions': soumissions,
+        'nombreCorrigees': corrigees,
+      };
+
+  /// Une copie rendue, corrigée ou non.
+  static Map<String, dynamic> _copie(
+    int id,
+    String etudiant,
+    String matricule, {
+    double? note,
+  }) =>
+      {
+        'id': id,
+        'etudiant': etudiant,
+        'matricule': matricule,
+        'fichierUrl': '/uploads/travaux/copie-$id.pdf',
+        'nomFichier': 'copie-$id.pdf',
+        'dateSoumission': '2026-09-0$id' 'T18:30:00',
+        'statut': note == null ? 'SOUMIS' : 'CORRIGE',
+        'note': ?note,
+        if (note != null) ...{
+          'commentaireCorrection':
+              'Raisonnement juste, rédaction à resserrer sur la partie 2.',
+          'urlCorrection': '/uploads/travaux/correction-$id.pdf',
+          'nomFichierCorrection': 'correction-$id.pdf',
+          'urlTelechargementCorrection':
+              '/api/fichiers/travaux/correction-$id.pdf',
+          'dateCorrection': '2026-09-1$id' 'T09:00:00',
+        },
+      };
+
+  /// Une ligne du catalogue des documents officiels.
+  static Map<String, dynamic> _documentOfficiel(
+    String code,
+    String libelle,
+    String statut,
+  ) =>
+      {
+        'type': code,
+        'label': libelle,
+        'description': 'Document officiel délivré par l\'établissement.',
+        'typeSource': code == 'RELEVE_NOTES' ? 'RELEVE' : 'ATTESTATION',
+        'fraisCodeRequis': 'FRAIS_DOC',
+        'statut': statut,
+        'canDownload': statut == 'DISPONIBLE',
+        'canRequest': statut == 'A_DEMANDER',
+        if (statut == 'DISPONIBLE') 'dateGeneration': '2026-08-28T09:00:00',
+        if (statut != 'DISPONIBLE')
+          'motif': switch (statut) {
+            'PAIEMENT_REQUIS' =>
+              'Paiement du frais documentaire requis avant téléchargement.',
+            'DEMANDE_EN_COURS' =>
+              'Votre demande est en cours de traitement par l\'administration.',
+            _ => 'Vous pouvez soumettre une demande.',
+          },
+      };
+
+  /// Une pièce du dossier de l'étudiant.
+  static Map<String, dynamic> _piece(
+    int id,
+    String type,
+    String nomFichier,
+    String statut,
+  ) =>
+      {
+        'id': id,
+        'type': type,
+        'nomFichier': nomFichier,
+        'url': '/uploads/documents/$id-$nomFichier',
+        'statut': statut,
+        'dateDepot': '2026-08-2${id % 10}T09:00:00',
+      };
+
+  /// Un support de cours.
+  static Map<String, dynamic> _support(int id, String titre, String type) => {
+        'id': id,
+        'titre': titre,
+        'description': 'Déposé pour la séance, à lire avant le cours.',
+        'type': type,
+        'url': '/uploads/supports/$id.pdf',
+        'urlTelechargement': '/api/cours/supports/$id/fichier',
+        'nomFichierOriginal': '$titre.pdf',
+        'tailleOctets': 1_540_000 + id,
+        'creeLe': '2026-08-2${id % 10}T09:00:00',
       };
 
   /// L'enregistrement générique, servi à toute route non déclarée.

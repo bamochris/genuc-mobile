@@ -247,6 +247,29 @@ abstract class ServiceApi {
     );
   }
 
+  /// Même chose, pour un fichier que le serveur PRODUIT à la demande.
+  ///
+  /// Certaines routes ne se contentent pas de servir un fichier existant :
+  /// elles le fabriquent à partir d'un corps de requête, et sont donc des
+  /// `POST`. Les appeler avec [octetsDe] envoyait un `GET` sur un chemin qui
+  /// n'existe qu'en `POST` — la génération des documents officiels a ainsi
+  /// toujours répondu 405, sous le libellé « Téléchargement impossible ».
+  Future<List<int>> octetsPostes(
+    String chemin, {
+    dynamic corps,
+    String contexte = 'Téléchargement impossible',
+  }) {
+    return _executer(
+      () => dio.post<List<int>>(
+        chemin,
+        data: corps,
+        options: Options(responseType: ResponseType.bytes),
+      ),
+      (d) => (d as List).cast<int>(),
+      contexte,
+    );
+  }
+
   static dynamic _deballer(dynamic donnees) => deballerReponse(donnees);
 
   static List<Fiche> _extraireListe(dynamic donnees) => extraireListe(donnees);

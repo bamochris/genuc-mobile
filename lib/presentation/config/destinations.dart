@@ -6,6 +6,7 @@ import '../providers/auth_provider.dart';
 import '../screens/commun/bibliotheque_screen.dart';
 import '../screens/commun/messagerie_screen.dart';
 import '../screens/etudiant/cours/cours_list_screen.dart';
+import '../screens/etudiant/cours/supports_etudiant_screen.dart';
 import '../screens/etudiant/dashboard/etudiant_dashboard_screen.dart';
 import '../screens/etudiant/demarches/demarches_screens.dart';
 import '../screens/etudiant/documents/documents_screens.dart';
@@ -29,6 +30,7 @@ import '../screens/professeur/cours/etudiants_cours_screen.dart';
 import '../screens/professeur/cours/mes_cours_screen.dart';
 import '../screens/professeur/cours/planning_screen.dart';
 import '../screens/professeur/cours/supports_screen.dart';
+import '../screens/professeur/cours/travaux_screen.dart';
 import '../screens/professeur/deliberation/deliberation_screen.dart';
 import '../screens/professeur/encadrement/encadrement_screens.dart';
 import '../screens/professeur/evaluations/evaluations_screens.dart';
@@ -329,6 +331,21 @@ class MenuPortail {
     construire: (_) => const CoursListScreen(),
   );
 
+  /// Les supports déposés par les enseignants, rangés par cours de l'horaire.
+  ///
+  /// Le portail professeur porte l'écran de dépôt depuis toujours ; côté
+  /// étudiant, aucune entrée n'y menait — et les seuls supports affichés
+  /// l'étaient dans le détail d'un cours PUBLIÉ au catalogue en ligne, jamais
+  /// ceux des cours de l'emploi du temps.
+  static final Destination _etudiantSupports = Destination(
+    chemin: '/etudiant/supports',
+    libelle: 'Supports de cours',
+    icone: Icons.attach_file_rounded,
+    iconeContour: Icons.attach_file_outlined,
+    couleur: _bleu,
+    construire: (_) => const SupportsEtudiantScreen(),
+  );
+
   static final Destination _etudiantFrais = Destination(
     chemin: '/etudiant/frais',
     libelle: 'Mes paiements',
@@ -350,6 +367,7 @@ class MenuPortail {
   static final List<EntreeMenu> etudiant = [
     EntreeSimple(_etudiantDashboard),
     EntreeSimple(_etudiantCours),
+    EntreeSimple(_etudiantSupports),
     EntreeSimple(
       Destination(
         chemin: '/etudiant/horaire',
@@ -695,6 +713,18 @@ class MenuPortail {
         couleur: _jaune,
         destinations: [
           _profCours,
+          // Publier un sujet, joindre ses consignes, relever et corriger les
+          // copies. Les quatre routes existaient côté serveur sans qu'aucun
+          // client ne les appelle : le circuit était instrumenté du côté qui
+          // rend, muet du côté qui demande et qui corrige.
+          Destination(
+            chemin: '/professeur/mes-cours/travaux',
+            libelle: 'Travaux & devoirs',
+            icone: Icons.assignment_rounded,
+            iconeContour: Icons.assignment_outlined,
+            couleur: _vert,
+            construire: (_) => const TravauxProfesseurScreen(),
+          ),
           Destination(
             chemin: '/professeur/mes-cours/supports',
             libelle: 'Supports',

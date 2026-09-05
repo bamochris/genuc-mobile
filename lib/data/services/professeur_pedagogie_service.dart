@@ -70,6 +70,92 @@ class ProfesseurPedagogieService extends ServiceApi {
   Future<void> supprimerSupport(String supportId) =>
       supprimer(ApiEndpoints.support(supportId));
 
+  // ─── Travaux et devoirs ────────────────────────────────────
+  //
+  // Les quatre routes existaient côté serveur sans qu'aucun client ne les
+  // appelle : le circuit était instrumenté du côté qui REND — l'étudiant
+  // dépose sa copie — et muet du côté qui demande et qui corrige.
+
+  /// Les travaux publiés par l'enseignant, avec leur cours et l'état des copies.
+  Future<List<Fiche>> travaux(String professeurId) => listeDe(
+        ApiEndpoints.travauxDuProfesseur(professeurId),
+        contexte: 'Vos travaux n\'ont pas pu être chargés.',
+      );
+
+  Future<Fiche> creerTravail({
+    required String coursId,
+    required String professeurId,
+    required String titre,
+    required String description,
+    required String type,
+    required String dateEcheance,
+    double? coefficient,
+    String? professeurNom,
+  }) =>
+      poster(
+        ApiEndpoints.travaux,
+        corps: {
+          'coursId': coursId,
+          'professeurId': professeurId,
+          'professeurNom': ?professeurNom,
+          'titre': titre,
+          'description': description,
+          'type': type,
+          'dateEcheance': dateEcheance,
+          'coefficient': ?coefficient,
+        },
+        contexte: 'Le travail n\'a pas pu être publié.',
+      );
+
+  /// Attache le fichier de consignes. Il remplace celui déjà joint, s'il y en a.
+  Future<Fiche> joindreConsignes({
+    required String travailId,
+    required String cheminFichier,
+    required String nomFichier,
+  }) async {
+    final formulaire = FormData.fromMap({
+      'fichier': await MultipartFile.fromFile(cheminFichier, filename: nomFichier),
+    });
+    return poster(
+      ApiEndpoints.travailConsignes(travailId),
+      corps: formulaire,
+      contexte: 'Les consignes n\'ont pas pu être jointes.',
+    );
+  }
+
+  Future<List<Fiche>> soumissions(String travailId) => listeDe(
+        ApiEndpoints.travailSoumissions(travailId),
+        contexte: 'Les copies de ce travail n\'ont pas pu être chargées.',
+      );
+
+  /// Corrige une copie.
+  ///
+  /// [cheminFichier] est la copie annotée, facultative : sans elle, celle déjà
+  /// rendue est conservée — reprendre une note ne doit pas effacer un document
+  /// que l'étudiant a peut-être déjà lu.
+  Future<Fiche> corrigerCopie({
+    required String soumissionId,
+    required double note,
+    String? commentaire,
+    String? cheminFichier,
+    String? nomFichier,
+  }) async {
+    final formulaire = FormData.fromMap({
+      'note': note,
+      'commentaireCorrection': ?commentaire,
+      if (cheminFichier != null)
+        'fichier': await MultipartFile.fromFile(
+          cheminFichier,
+          filename: nomFichier,
+        ),
+    });
+    return poster(
+      ApiEndpoints.soumissionCorriger(soumissionId),
+      corps: formulaire,
+      contexte: 'La correction n\'a pas pu être enregistrée.',
+    );
+  }
+
   Future<List<Fiche>> mesEtudiants(String professeurId) => listeDe(
         ApiEndpoints.professeurEtudiantsDisponibles(professeurId),
         contexte: 'La liste des étudiants n\'a pas pu être chargée.',

@@ -10,6 +10,7 @@ import '../../../../data/services/etudiant_academique_service.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../widgets/etat_widgets.dart';
 import '../../../widgets/portail_widgets.dart';
+import '../cours/supports_etudiant_screen.dart';
 
 /// Emploi du temps de l'étudiant : cours de la semaine, examens et événements.
 ///
@@ -363,6 +364,7 @@ class _CarteSeance extends StatelessWidget {
     final professeur =
         seance.texte('professeurNom', alias: const ['professeur']);
     final semestre = _semestreCourt[seance.texte('semestre')];
+    final coursId = seance.texte('coursId');
 
     return CartePortail(
       child: Row(
@@ -420,6 +422,28 @@ class _CarteSeance extends StatelessWidget {
                       _Meta(icone: Icons.person_rounded, texte: professeur),
                   ],
                 ),
+                // Le support d'un cours sert PENDANT la séance : c'est ici,
+                // sur le créneau, qu'il doit être à portée — et non seulement
+                // dans un écran que rien ne relie à l'emploi du temps.
+                if (coursId.isNotEmpty)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      icon: const Icon(Icons.attach_file_rounded, size: 16),
+                      label: const Text('Supports', style: TextStyle(fontSize: 12)),
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              SupportsEtudiantScreen(coursIdInitial: coursId),
+                        ),
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),

@@ -352,7 +352,7 @@ class _ApprendreCoursScreenState extends State<ApprendreCoursScreen>
     if (fichier.taille > Fichiers.tailleMaxOctets) {
       setState(() {
         _message = 'Fichier trop lourd (${fichier.tailleLisible}). '
-            'Maximum accepté : 50 Mo.';
+            'Maximum accepté : ${Fichiers.tailleMaxLisible}.';
         _messageSucces = false;
       });
       return;

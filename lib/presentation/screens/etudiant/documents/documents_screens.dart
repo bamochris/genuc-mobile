@@ -8,6 +8,7 @@ import '../../../../core/utils/formatters.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../data/services/appel_api.dart';
 import '../../../../data/services/etudiant_academique_service.dart';
+import '../../../../data/services/fichiers_prives.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../widgets/formulaire_dynamique.dart';
 import '../../../widgets/portail_widgets.dart';
@@ -20,14 +21,55 @@ import '../../commun/ecran_ressource.dart';
 // Mes documents (pièces téléversées)
 // ─────────────────────────────────────────────────────────────
 
-class MesDocumentsScreen extends StatelessWidget {
+class MesDocumentsScreen extends StatefulWidget {
   const MesDocumentsScreen({super.key});
+
+  @override
+  State<MesDocumentsScreen> createState() => _MesDocumentsScreenState();
+}
+
+class _MesDocumentsScreenState extends State<MesDocumentsScreen> {
+  /// Les pieces que l'etablissement exige de cet etudiant.
+  ///
+  /// L'ecran ecrivait sa PROPRE liste de natures, et deux de ses six choix
+  /// n'existaient meme pas cote serveur : `DIPLOME` et `PHOTO` (l'enumeration
+  /// dit `DIPLOME_ETAT` et `PHOTO_IDENTITE`). Le depot partait en 400 —
+  /// televerser son diplome ou sa photo depuis le telephone n'a jamais
+  /// fonctionne. Rien n'etant plus ecrit ici, ces deux choix disparaissent
+  /// d'eux-memes.
+  List<Fiche> _exigees = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    _chargerExigences();
+  }
+
+  Future<void> _chargerExigences() async {
+    try {
+      final liste = await context.read<EtudiantAcademiqueService>().piecesExigees();
+      if (!mounted) return;
+      setState(() => _exigees = liste);
+    } catch (_) {
+      // Sans la liste, l'ecran ne PRETEND rien : il n'affiche pas une exigence
+      // vide, qui se lirait « on ne vous demande rien ».
+      if (mounted) setState(() => _exigees = const []);
+    }
+  }
+
+  /// Nature de depot -> libelle de l'etablissement.
+  Map<String, String> get _libelles => {
+        for (final f in _exigees)
+          if (f.texte('typeEtudiant').isNotEmpty)
+            f.texte('typeEtudiant'): f.texte('libelle'),
+      };
 
   @override
   Widget build(BuildContext context) {
     final service = context.read<EtudiantAcademiqueService>();
     final inscriptionId =
         context.read<AuthProvider>().user?.inscriptionId ?? '';
+    final libelles = _libelles;
 
     return EcranRessource(
       titre: 'Mes documents',
@@ -42,7 +84,7 @@ class MesDocumentsScreen extends StatelessWidget {
           alias: const ['nom', 'libelle'],
           defaut: 'Document',
         ),
-        sousTitre: (f) => _libelleType(f.texte('type')),
+        sousTitre: (f) => _libelleType(f.texte('type'), libelles),
         statut: (f) {
           final valide = f.texte('statut', alias: const ['statutValidation']);
           return valide.isEmpty ? null : _statut(valide);
@@ -62,32 +104,46 @@ class MesDocumentsScreen extends StatelessWidget {
       // envoie avant de l'envoyer.
       champsCreation: const [],
       actions: [
+        // La pièce porte son chemin de STOCKAGE (« /uploads/documents/… »),
+        // que le serveur refuse en accès direct : elle ne s'obtient que par
+        // `/api/fichiers/**`, avec le jeton. Passé à `launchUrl`, ce chemin
+        // n'ouvrait rien — et son échec ne remontait qu'un `false` ignoré.
         ActionFiche(
           libelle: 'Ouvrir',
           icone: Icons.open_in_new_rounded,
           visiblePour: (f) => f.texte('url', alias: const ['lien']).isNotEmpty,
           executer: (contexte, fiche) async {
-            await Fichiers.ouvrirLien(fiche.texte('url', alias: const ['lien']));
+            await service.ouvrirRessource(
+              fiche.texte('url', alias: const ['lien']),
+              nomPropose: fiche.texte('nomFichier', alias: const ['nom']),
+            );
           },
         ),
       ],
       entete: (contexte) => _BoutonTeleverser(
         service: service,
         inscriptionId: inscriptionId,
+        exigees: _exigees,
       ),
     );
   }
 
-  static String _libelleType(String code) => switch (code) {
-        'CARTE_IDENTITE' => 'Carte d\'identité',
-        'DIPLOME' => 'Diplôme',
-        'RELEVE_NOTES' => 'Relevé de notes',
-        'PHOTO' => 'Photo d\'identité',
-        'ACTE_NAISSANCE' => 'Acte de naissance',
-        'ATTESTATION' => 'Attestation',
-        '' => '',
-        _ => code.replaceAll('_', ' '),
-      };
+  /// Libellé d'une nature de pièce.
+  ///
+  /// Cette table traduisait `DIPLOME`, `PHOTO` et `ATTESTATION` — trois codes
+  /// que le serveur n'émet pas — et laissait les vrais retomber sur
+  /// `code.replaceAll('_', ' ')` : l'étudiant lisait « DIPLOME ETAT » en
+  /// capitales. Les libellés viennent désormais des pièces exigées, donc du
+  /// vocabulaire de l'établissement ; ce qui suit n'est que le repli, mis en
+  /// forme au lieu d'être rendu brut.
+  static String _libelleType(String code, [Map<String, String> depuisServeur = const {}]) {
+    if (code.isEmpty) return '';
+    final duServeur = depuisServeur[code];
+    if (duServeur != null && duServeur.isNotEmpty) return duServeur;
+    if (code == 'AUTRE') return 'Autre document';
+    final mots = code.toLowerCase().replaceAll('_', ' ');
+    return mots.isEmpty ? '' : '${mots[0].toUpperCase()}${mots.substring(1)}';
+  }
 
   static (String, Color) _statut(String code) => switch (code.toUpperCase()) {
         'VALIDE' || 'VALIDEE' || 'ACCEPTE' => ('Validé', AppTheme.statutVert),
@@ -100,7 +156,14 @@ class _BoutonTeleverser extends StatefulWidget {
   final EtudiantAcademiqueService service;
   final String inscriptionId;
 
-  const _BoutonTeleverser({required this.service, required this.inscriptionId});
+  /// Les pièces exigées, telles que l'établissement les a configurées.
+  final List<Fiche> exigees;
+
+  const _BoutonTeleverser({
+    required this.service,
+    required this.inscriptionId,
+    required this.exigees,
+  });
 
   @override
   State<_BoutonTeleverser> createState() => _BoutonTeleverserState();
@@ -138,25 +201,35 @@ class _BoutonTeleverserState extends State<_BoutonTeleverser> {
   }
 
   Future<void> _televerser() async {
+    // Les natures proposées sont celles que l'ÉTABLISSEMENT demande, dans son
+    // vocabulaire, plus « Autre document » — un étudiant a parfois une pièce à
+    // joindre que le règlement n'a pas prévue.
+    //
+    // La liste écrite en dur ici proposait `DIPLOME` et `PHOTO`, absents de
+    // l'énumération du serveur (`DIPLOME_ETAT`, `PHOTO_IDENTITE`) :
+    // `TypeDocument.valueOf` levait, et le dépôt repartait en 400. Téléverser
+    // son diplôme ou sa photo depuis le téléphone n'a jamais fonctionné.
+    final options = <String, String>{
+      for (final f in widget.exigees)
+        if (f.texte('typeEtudiant').isNotEmpty)
+          f.texte('typeEtudiant'): f.booleen('obligatoire')
+              ? '${f.texte('libelle')} (obligatoire)'
+              : f.texte('libelle'),
+      'AUTRE': 'Autre document',
+    };
+
     final type = await DialogueFormulaire.ouvrir(
       context,
       titre: 'Nature de la pièce',
       libelleValidation: 'Choisir le fichier',
-      champs: const [
+      champs: [
         ChampFormulaire(
           cle: 'type',
           libelle: 'Type de document',
           type: TypeChamp.liste,
           obligatoire: true,
-          valeurInitiale: 'CARTE_IDENTITE',
-          options: {
-            'CARTE_IDENTITE': 'Carte d\'identité',
-            'ACTE_NAISSANCE': 'Acte de naissance',
-            'DIPLOME': 'Diplôme',
-            'RELEVE_NOTES': 'Relevé de notes',
-            'PHOTO': 'Photo d\'identité',
-            'AUTRE': 'Autre',
-          },
+          valeurInitiale: options.keys.first,
+          options: options,
         ),
       ],
     );
@@ -170,7 +243,7 @@ class _BoutonTeleverserState extends State<_BoutonTeleverser> {
     if (fichier.taille > Fichiers.tailleMaxOctets) {
       setState(() {
         _retour = 'Fichier trop lourd (${fichier.tailleLisible}). '
-            'Maximum accepté : 50 Mo.';
+            'Maximum accepté : ${Fichiers.tailleMaxLisible}.';
         _succes = false;
       });
       return;
@@ -207,6 +280,29 @@ class _BoutonTeleverserState extends State<_BoutonTeleverser> {
 
 /// Documents que l'établissement génère à la demande (certificat de
 /// scolarité, relevé officiel…).
+/// Documents officiels : le CATALOGUE de l'établissement, ligne par ligne.
+///
+/// ── Ce que cet écran lisait, et ce que le serveur envoie ────────────────
+///
+/// `DocumentsOfficielsService.mapperDocument` rend `type`, `label`,
+/// `description`, `typeSource`, `fraisCodeRequis`, `statut`, `canDownload`,
+/// `canRequest`, `motif`, et — pour un document déjà émis — `documentId` et
+/// `dateGeneration`. L'écran lisait `libelle`, `numero` et `dateEmission` :
+/// trois clés qui n'existent dans aucune réponse. Le titre retombait donc sur
+/// le CODE brut (« CERTIFICAT_SCOLARITE »), le sous-titre et la date restaient
+/// vides en permanence.
+///
+/// Il ignorait surtout `statut` et `canDownload` : « Télécharger » était
+/// proposé sur toutes les lignes, y compris celles en attente de paiement ou
+/// de traitement — un bouton qui ne pouvait que retourner une erreur.
+///
+/// ── Pourquoi le formulaire « Demander » disparaît ───────────────────────
+///
+/// Il proposait quatre types écrits en dur. Or le catalogue est un
+/// PARAMÉTRAGE d'établissement (`DocumentOfficielConfig`) : demander un code
+/// absent de ce paramétrage renvoie « Document officiel introuvable ». La
+/// demande se fait donc sur la ligne du document voulu, comme sur le web —
+/// c'est la seule liste qui soit sûrement la bonne.
 class DocumentsOfficielsScreen extends StatelessWidget {
   const DocumentsOfficielsScreen({super.key});
 
@@ -219,18 +315,30 @@ class DocumentsOfficielsScreen extends StatelessWidget {
     return EcranRessource(
       titre: 'Documents officiels',
       sousTitre: 'Générés et signés par l\'établissement',
-      libelleCreation: 'Demander un document',
-      messageVide: 'Aucun document officiel disponible.',
+      messageVide: 'Aucun document officiel n\'est configuré pour votre '
+          'établissement.',
       charger: () => service.documentsOfficiels(inscriptionId),
       description: DescriptionFiche(
         icone: Icons.verified_rounded,
-        titre: (f) => f.texte('libelle', alias: const ['type', 'nom'], defaut: 'Document'),
-        sousTitre: (f) => f.texteOuNul('numero', alias: const ['reference']),
+        titre: (f) => f.texte('label', alias: const ['libelle'], defaut: 'Document'),
+        sousTitre: (f) => f.texteOuNul('description'),
+        statut: (f) => _statutDocument(f.texte('statut')),
         details: (f) => [
-          LigneDetail(
-            libelle: 'Émis le',
-            valeur: formatDate(f.texteOuNul('dateEmission', alias: const ['date'])),
-          ),
+          if (f.texteOuNul('dateGeneration') != null)
+            LigneDetail(
+              libelle: 'Généré le',
+              valeur: formatDate(f.texteOuNul('dateGeneration')),
+            ),
+          if (f.texte('fraisCodeRequis').isNotEmpty)
+            LigneDetail(
+              libelle: 'Frais lié',
+              valeur: f.texte('fraisCodeRequis'),
+            ),
+          // Le motif dit POURQUOI le document n'est pas disponible : paiement
+          // attendu, demande en cours, demande rejetée. Sans lui, un écran qui
+          // n'offre aucun bouton n'explique rien.
+          if (f.texte('motif').isNotEmpty)
+            LigneDetail(libelle: 'À savoir', valeur: f.texte('motif')),
         ],
       ),
       actions: [
@@ -238,8 +346,9 @@ class DocumentsOfficielsScreen extends StatelessWidget {
           libelle: 'Télécharger',
           icone: Icons.download_rounded,
           couleur: AppTheme.statutVert,
+          visiblePour: _peutTelecharger,
           executer: (contexte, fiche) async {
-            final type = fiche.texte('type', defaut: 'CERTIFICAT_SCOLARITE');
+            final type = fiche.texte('type');
             final octets = await service.genererDocument(inscriptionId, type);
             await Fichiers.enregistrerEtOuvrir(
               octets,
@@ -247,26 +356,29 @@ class DocumentsOfficielsScreen extends StatelessWidget {
             );
           },
         ),
-      ],
-      champsCreation: const [
-        ChampFormulaire(
-          cle: 'type',
-          libelle: 'Type de document',
-          type: TypeChamp.liste,
-          obligatoire: true,
-          valeurInitiale: 'CERTIFICAT_SCOLARITE',
-          options: {
-            'CERTIFICAT_SCOLARITE': 'Certificat de scolarité',
-            'RELEVE_NOTES': 'Relevé de notes officiel',
-            'ATTESTATION_REUSSITE': 'Attestation de réussite',
-            'CERTIFICAT_INSCRIPTION': 'Certificat d\'inscription',
-          },
+        ActionFiche(
+          libelle: 'Demander',
+          icone: Icons.send_rounded,
+          visiblePour: (f) => f.donnees['canRequest'] == true,
+          executer: (contexte, fiche) =>
+              service.demanderDocument(inscriptionId, fiche.texte('type')),
         ),
       ],
-      onCreer: (valeurs) =>
-          service.demanderDocument(inscriptionId, valeurs['type'].toString()),
     );
   }
+
+  /// `canDownload` fait foi ; `statut` reste en second recours pour une
+  /// réponse plus ancienne qui ne porterait pas le drapeau.
+  static bool _peutTelecharger(Fiche f) =>
+      f.donnees['canDownload'] == true || f.texte('statut') == 'DISPONIBLE';
+
+  static (String, Color)? _statutDocument(String code) => switch (code) {
+        'DISPONIBLE' => ('Disponible', AppTheme.statutVert),
+        'DEMANDE_EN_COURS' => ('Demande en cours', AppTheme.statutOrange),
+        'PAIEMENT_REQUIS' => ('Paiement requis', AppTheme.statutRouge),
+        'A_DEMANDER' => ('À demander', AppTheme.statutBleu),
+        _ => null,
+      };
 }
 
 // ─────────────────────────────────────────────────────────────

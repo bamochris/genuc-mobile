@@ -39,7 +39,21 @@ class Fichiers {
   ///
   /// Vérifiée AVANT l'envoi : au-delà, Nginx coupe la connexion et l'écran
   /// affiche « serveur déconnecté » au lieu de « fichier trop lourd ».
-  static const int tailleMaxOctets = 50 * 1024 * 1024;
+  ///
+  /// La valeur annoncée était de 50 Mo, quand `max-file-size` vaut 10 Mo :
+  /// l'application laissait donc pousser une vidéo de 40 Mo pendant plusieurs
+  /// minutes sur une liaison mobile, pour un échec sans explication. Le web
+  /// porte désormais le même plafond (`SupportsCours.jsx`).
+  static const int tailleMaxOctets = 10 * 1024 * 1024;
+
+  /// La limite telle qu'on l'annonce à l'écran.
+  ///
+  /// Six écrans écrivaient « Maximum accepté : 50 Mo » en dur à côté d'un test
+  /// portant sur [tailleMaxOctets] : changer la constante ne changeait pas le
+  /// message, et l'utilisateur lisait un plafond que le contrôle ne pratiquait
+  /// pas.
+  static String get tailleMaxLisible =>
+      '${tailleMaxOctets ~/ (1024 * 1024)} Mo';
 
   /// Ouvre le sélecteur de fichiers. [extensions] sans point (`['xlsx']`).
   static Future<FichierChoisi?> choisir({

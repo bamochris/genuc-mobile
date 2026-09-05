@@ -171,6 +171,10 @@ void main() {
     const cheminsWebEtudiant = [
       '/etudiant/dashboard',
       '/etudiant/mes-cours',
+      // Les supports déposés par les enseignants. Ajouté au web et au mobile
+      // le 04/09/2026 : le dépôt existait côté professeur, aucune entrée n'y
+      // menait côté étudiant.
+      '/etudiant/supports',
       '/etudiant/horaire',
       '/etudiant/presences',
       '/etudiant/presences/scanner',
@@ -197,6 +201,9 @@ void main() {
     const cheminsWebProfesseur = [
       '/professeur/dashboard',
       '/professeur/mes-cours',
+      // Ajouté au web et au mobile le 05/09/2026 : publier un travail, joindre
+      // ses consignes et corriger les copies n'avait d'écran nulle part.
+      '/professeur/mes-cours/travaux',
       '/professeur/mes-cours/supports',
       '/professeur/mes-cours/planning',
       '/professeur/mes-etudiants',

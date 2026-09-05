@@ -8,6 +8,7 @@ import '../../../../core/utils/formatters.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../data/services/appel_api.dart';
 import '../../../../data/services/professeur_pedagogie_service.dart';
+import '../../../../data/services/supports_cours.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../widgets/formulaire_dynamique.dart';
 import '../../../widgets/portail_widgets.dart';
@@ -213,7 +214,7 @@ class _SupportsCoursScreenState extends State<SupportsCoursScreen> {
     if (fichier.taille > Fichiers.tailleMaxOctets) {
       setState(() {
         _message = 'Fichier trop lourd (${fichier.tailleLisible}). '
-            'La limite est de 50 Mo.';
+            'La limite est de ${Fichiers.tailleMaxLisible}.';
         _messageSucces = false;
       });
       return;
@@ -246,19 +247,25 @@ class _SupportsCoursScreenState extends State<SupportsCoursScreen> {
     }
   }
 
+  /// Ouvre le support tel que l'étudiant le recevra.
+  ///
+  /// L'écran passait `support.url` à `Fichiers.ouvrirLien`. Ce champ porte le
+  /// chemin de STOCKAGE — `/uploads/supports/<uuid>.pdf` —, ni schéma ni
+  /// hôte : `launchUrl` n'en faisait rien, et le fichier n'est de toute façon
+  /// pas servi à cette adresse. Le téléchargement passe par la route
+  /// authentifiée, puis le système choisit le lecteur.
   Future<void> _ouvrir(Fiche support) async {
-    final url = support.texte('url', alias: const ['lien', 'cheminFichier']);
-    if (url.isEmpty) {
+    setState(() {
+      _message = 'Ouverture du support…';
+      _messageSucces = true;
+    });
+    try {
+      await _service.ouvrirSupport(support);
+      if (mounted) setState(() => _message = null);
+    } on ApiException catch (e) {
+      if (!mounted) return;
       setState(() {
-        _message = 'Ce support ne porte aucun lien de téléchargement.';
-        _messageSucces = false;
-      });
-      return;
-    }
-    final ouvert = await Fichiers.ouvrirLien(url);
-    if (!ouvert && mounted) {
-      setState(() {
-        _message = 'Le support n\'a pas pu être ouvert.';
+        _message = e.message;
         _messageSucces = false;
       });
     }

@@ -130,10 +130,21 @@ class EtudiantAcademiqueService extends ServiceApi {
 
   // ─── Travaux, TFC, stages ──────────────────────────────────
 
-  Future<List<Fiche>> travaux(String inscriptionId) => listeDe(
-        ApiEndpoints.etudiantTravaux(inscriptionId),
-        contexte: 'Vos travaux n\'ont pas pu être chargés.',
-      );
+  /// Les travaux et devoirs de l'étudiant.
+  ///
+  /// `TravauxService.mesTravaux` rend un OBJET — `{travaux: […], coursList:
+  /// […]}` — et non un tableau. `listeDe` ne reconnaît que les enveloppes
+  /// `content`, `items`, `resultats` et `liste` : la clé `travaux` ne lui
+  /// disait rien, et il rendait donc une liste vide, sans erreur. L'écran
+  /// « Travaux et devoirs » a annoncé « aucun travail demandé » à tout le
+  /// monde depuis qu'il existe.
+  Future<List<Fiche>> travaux(String inscriptionId) async {
+    final reponse = await ficheDe(
+      ApiEndpoints.etudiantTravaux(inscriptionId),
+      contexte: 'Vos travaux n\'ont pas pu être chargés.',
+    );
+    return reponse.liste('travaux');
+  }
 
   Future<Fiche> soumettreTravail({
     required String travailId,
@@ -245,10 +256,17 @@ class EtudiantAcademiqueService extends ServiceApi {
         corps: {'type': type},
       );
 
+  /// Produit le PDF d'un document officiel et rend ses octets.
+  ///
+  /// La route est un `POST` portant `{type}` dans le CORPS. L'appel partait en
+  /// `GET` avec le type en paramètre d'URL : le serveur ne porte aucun `GET`
+  /// sur ce chemin, l'écran n'a donc jamais téléchargé un seul document — le
+  /// 405 s'affichant sous le libellé générique « Téléchargement impossible ».
   Future<List<int>> genererDocument(String inscriptionId, String type) =>
-      octetsDe(
+      octetsPostes(
         ApiEndpoints.etudiantDocumentGenerer(inscriptionId),
-        parametres: {'type': type},
+        corps: {'type': type},
+        contexte: 'Ce document n\'a pas pu être généré.',
       );
 
   Future<List<Fiche>> attestations(String inscriptionId) =>
@@ -265,6 +283,17 @@ class EtudiantAcademiqueService extends ServiceApi {
 
   Future<List<Fiche>> documentsPersonnels(String inscriptionId) =>
       listeDe(ApiEndpoints.documentsInscription(inscriptionId));
+
+  /// Les pièces exigées de l'étudiant connecté.
+  ///
+  /// Chaque fiche porte `cle`, `libelle`, `groupe`, `obligatoire` et
+  /// `typeEtudiant` — cette dernière étant la nature sous laquelle la pièce se
+  /// dépose. C'est le SERVEUR qui traduit : l'application ne redéduit pas la
+  /// correspondance, sous peine d'entretenir un vocabulaire de plus.
+  Future<List<Fiche>> piecesExigees() => listeDe(
+        ApiEndpoints.documentsRequisEtudiant,
+        contexte: 'Les pièces demandées n\'ont pas pu être chargées.',
+      );
 
   Future<Fiche> televerserDocument({
     required String inscriptionId,
@@ -303,6 +332,29 @@ class EtudiantAcademiqueService extends ServiceApi {
   Future<List<Fiche>> supportsDuCours(String coursId) => listeDe(
         ApiEndpoints.coursSupports(coursId),
         contexte: 'Les supports de ce cours n\'ont pas pu être chargés.',
+      );
+
+  /// Les supports de TOUS les cours que l'étudiant suit, cours par cours.
+  ///
+  /// Chaque fiche porte `coursId`, `coursTitre`, `coursCode`,
+  /// `professeurNom`, la liste `seances` (les créneaux de l'horaire où ce
+  /// support servira) et la liste `supports`.
+  ///
+  /// Le serveur part de l'emploi du temps de l'inscription, déjà cloisonné par
+  /// filière, promotion et vacation — et non du catalogue des cours publiés en
+  /// ligne, qui ne contient presque jamais les cours réellement suivis.
+  ///
+  /// [semestre] vaut `S1` ou `S2` ; nul, toute l'année est rendue.
+  Future<List<Fiche>> supportsDeMesCours(
+    String inscriptionId, {
+    String? semestre,
+  }) =>
+      listeDe(
+        ApiEndpoints.etudiantSupports(inscriptionId),
+        parametres: (semestre == null || semestre.isEmpty)
+            ? null
+            : {'semestre': semestre},
+        contexte: 'Vos supports de cours n\'ont pas pu être chargés.',
       );
 
   Future<Fiche> carteEtudiant(String inscriptionId) => ficheDe(

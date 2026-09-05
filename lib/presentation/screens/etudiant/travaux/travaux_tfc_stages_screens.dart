@@ -8,6 +8,7 @@ import '../../../../core/utils/formatters.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../data/services/appel_api.dart';
 import '../../../../data/services/etudiant_academique_service.dart';
+import '../../../../data/services/fichiers_prives.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../widgets/portail_widgets.dart';
 import '../../commun/ecran_ressource.dart';
@@ -51,8 +52,16 @@ class TravauxScreen extends StatelessWidget {
           if (f.decimalOuNul('note') != null)
             LigneDetail(
               libelle: 'Note',
-              valeur: '${f.decimal('note').toStringAsFixed(1)} / '
-                  '${f.decimalOuNul('coefficient')?.toStringAsFixed(0) ?? '20'}',
+              // Le dénominateur était le COEFFICIENT, qui est un poids dans la
+              // moyenne et non un barème : une copie notée 15,5 sur un travail
+              // de coefficient 2 s'affichait « 15.5 / 2 ». Le portail web, lui,
+              // écrit « /20 » — la convention de tous les écrans de notes.
+              valeur: '${f.decimal('note').toStringAsFixed(1)} / 20',
+            ),
+          if (f.decimalOuNul('coefficient') != null)
+            LigneDetail(
+              libelle: 'Coefficient',
+              valeur: f.decimal('coefficient').toStringAsFixed(1),
             ),
           if (f.texte('commentaireCorrection').isNotEmpty)
             LigneDetail(
@@ -62,12 +71,44 @@ class TravauxScreen extends StatelessWidget {
         ],
       ),
       actions: [
+        // Les consignes et la copie corrigée sont des fichiers du serveur :
+        // leur chemin de stockage n'ouvre rien tel quel, il faut les demander
+        // avec le jeton. `ouvrirRessource` accepte aussi une vraie adresse,
+        // ces deux champs étant saisis à la main par l'enseignant.
         ActionFiche(
           libelle: 'Consignes',
           icone: Icons.description_rounded,
           visiblePour: (f) => f.texte('urlConsignes').isNotEmpty,
           executer: (contexte, fiche) async {
-            await Fichiers.ouvrirLien(fiche.texte('urlConsignes'));
+            // L'adresse rendue par le serveur d'abord : le chemin de stockage
+            // ne reste qu'un repli pour une réponse antérieure au 05/09/2026.
+            await service.ouvrirRessource(
+              fiche.texte('urlTelechargementConsignes',
+                  alias: const ['urlConsignes']),
+              nomPropose: fiche.texte(
+                'nomFichierConsignes',
+                defaut: 'consignes_${fiche.texte('titre', defaut: 'travail')}',
+              ),
+            );
+          },
+        ),
+        // La copie corrigée n'était proposée QUE par le web : l'étudiant
+        // mobile voyait sa note et le commentaire, jamais le document sur
+        // lequel ils portent.
+        ActionFiche(
+          libelle: 'Ma copie corrigée',
+          icone: Icons.rate_review_rounded,
+          couleur: AppTheme.statutViolet,
+          visiblePour: (f) => f.texte('urlCorrection').isNotEmpty,
+          executer: (contexte, fiche) async {
+            await service.ouvrirRessource(
+              fiche.texte('urlTelechargementCorrection',
+                  alias: const ['urlCorrection']),
+              nomPropose: fiche.texte(
+                'nomFichierCorrection',
+                defaut: 'correction_${fiche.texte('titre', defaut: 'travail')}',
+              ),
+            );
           },
         ),
         ActionFiche(
@@ -83,7 +124,7 @@ class TravauxScreen extends StatelessWidget {
             if (fichier.taille > Fichiers.tailleMaxOctets) {
               throw ArgumentError(
                 'Fichier trop lourd (${fichier.tailleLisible}). '
-                'Maximum accepté : 50 Mo.',
+                'Maximum accepté : ${Fichiers.tailleMaxLisible}.',
               );
             }
             await service.soumettreTravail(
@@ -312,7 +353,7 @@ class _TfcEtudiantScreenState extends State<TfcEtudiantScreen> {
     if (fichier.taille > Fichiers.tailleMaxOctets) {
       setState(() {
         _message = 'Fichier trop lourd (${fichier.tailleLisible}). '
-            'Maximum accepté : 50 Mo.';
+            'Maximum accepté : ${Fichiers.tailleMaxLisible}.';
         _messageSucces = false;
       });
       return;
@@ -686,7 +727,7 @@ class _StagesEtudiantScreenState extends State<StagesEtudiantScreen>
     if (fichier.taille > Fichiers.tailleMaxOctets) {
       setState(() {
         _message = 'Fichier trop lourd (${fichier.tailleLisible}). '
-            'Maximum accepté : 50 Mo.';
+            'Maximum accepté : ${Fichiers.tailleMaxLisible}.';
         _messageSucces = false;
       });
       return;
