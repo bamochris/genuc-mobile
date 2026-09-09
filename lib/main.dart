@@ -19,6 +19,7 @@ import 'data/services/etudiant_academique_service.dart';
 import 'data/services/etudiant_service.dart';
 import 'data/services/professeur_pedagogie_service.dart';
 import 'data/services/professeur_service.dart';
+import 'presentation/providers/annees_academiques_provider.dart';
 import 'presentation/providers/auth_provider.dart';
 import 'presentation/providers/notification_provider.dart';
 import 'presentation/providers/professeur_provider.dart';
@@ -126,6 +127,13 @@ class GenucApp extends StatelessWidget {
         ),
         ChangeNotifierProvider<ThemeProvider>(
           create: (_) => ThemeProvider(),
+        ),
+        // Le référentiel des années de l'établissement. Partagé, parce que six
+        // écrans en dépendent et qu'ils doivent tous lire LA MÊME année : le
+        // recalculer écran par écran est exactement ce qui faisait enregistrer
+        // des notes sous un exercice que personne n'avait ouvert.
+        ChangeNotifierProvider<AnneesAcademiquesProvider>(
+          create: (_) => AnneesAcademiquesProvider(dependencies.communService),
         ),
         Provider<PresenceContexteService>(
           create: (_) => dependencies.presenceContexte,

@@ -11,7 +11,6 @@ import '../../../providers/auth_provider.dart';
 import '../../../providers/student_provider.dart';
 import '../../../widgets/etat_widgets.dart';
 import '../../../widgets/portail_widgets.dart';
-import '../lms/apprendre_cours_screen.dart';
 
 /// Détail d'un cours : progression globale et liste des leçons.
 ///
@@ -113,20 +112,12 @@ class _CoursDetailScreenState extends State<CoursDetailScreen> {
 
     return PagePortail(
       titre: 'Détail du cours',
-      actions: [
-        IconButton(
-          icon: const Icon(Icons.auto_stories_rounded),
-          tooltip: 'Suivre ce cours en ligne',
-          onPressed: () => Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => ApprendreCoursScreen(
-                coursId: widget.coursId,
-                coursTitre: studentProvider.coursDetail?.cours.titre,
-              ),
-            ),
-          ),
-        ),
-      ],
+      // Le bouton « Suivre ce cours en ligne » a été RETIRÉ, et l'écran qu'il
+      // ouvrait avec lui. Il lisait `/api/lms/cours/{id}/chapitres`, qui rend
+      // toujours une liste vide : l'étudiant tombait sur une page sans contenu,
+      // et ce qu'il y cochait (« marquer vu », remise de devoir) était refusé
+      // par le serveur. Cette page-ci fait le travail, avec les VRAIES leçons,
+      // les supports et l'avancement du cours.
       corps: studentProvider.coursDetailLoading
           ? const EtatChargement(message: 'Chargement du cours…')
           : studentProvider.coursDetailError != null

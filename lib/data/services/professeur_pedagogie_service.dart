@@ -456,26 +456,34 @@ class ProfesseurPedagogieService extends ServiceApi {
   Future<Fiche> majMonCompte(String utilisateurId, Map<String, dynamic> donnees) =>
       mettreAJour(ApiEndpoints.utilisateur(utilisateurId), corps: donnees);
 
-  // ─── LMS ───────────────────────────────────────────────────
+  // ─── Contenu du cours : les leçons ─────────────────────────
+  //
+  // Ces trois méthodes remplacent les six anciennes de `/api/lms/…`
+  // (`chapitres`, `ajouterChapitre`, `modifierChapitre`, `supprimerChapitre`,
+  // `devoirs`, `ajouterDevoir`) et `statistiquesApprentissage`.
+  //
+  // L'enseignant déposait son contenu dans une façade qui ne persiste rien :
+  // la liste revenait vide au rechargement, et l'ajout se soldait par une
+  // erreur. Les leçons, elles, sont bien enregistrées — et c'est ce que
+  // l'étudiant lit sur la fiche du cours.
 
-  Future<List<Fiche>> chapitres(String coursId) =>
-      listeDe(ApiEndpoints.lmsChapitres(coursId));
+  Future<List<Fiche>> lecons(String coursId) =>
+      listeDe(
+        ApiEndpoints.coursLecons(coursId),
+        contexte: 'Les leçons de ce cours n\'ont pas pu être chargées.',
+      );
 
-  Future<Fiche> ajouterChapitre(String coursId, Map<String, dynamic> donnees) =>
-      poster(ApiEndpoints.lmsChapitres(coursId), corps: donnees);
+  /// `POST /api/cours/{id}/lecons` attend du JSON, pas un multipart : un
+  /// fichier se dépose ensuite comme SUPPORT du cours, pas ici.
+  Future<Fiche> ajouterLecon(String coursId, Map<String, dynamic> donnees) =>
+      poster(
+        ApiEndpoints.coursLecons(coursId),
+        corps: donnees,
+        contexte: 'La leçon n\'a pas pu être ajoutée.',
+      );
 
-  Future<Fiche> modifierChapitre(String chapitreId, Map<String, dynamic> donnees) =>
-      mettreAJour(ApiEndpoints.lmsChapitre(chapitreId), corps: donnees);
-
-  Future<void> supprimerChapitre(String chapitreId) =>
-      supprimer(ApiEndpoints.lmsChapitre(chapitreId));
-
-  Future<List<Fiche>> devoirs(String coursId) =>
-      listeDe(ApiEndpoints.lmsDevoirs(coursId));
-
-  Future<Fiche> ajouterDevoir(String coursId, Map<String, dynamic> donnees) =>
-      poster(ApiEndpoints.lmsDevoirs(coursId), corps: donnees);
-
-  Future<Fiche> statistiquesApprentissage(String coursId) =>
-      ficheDe(ApiEndpoints.lmsStatistiques(coursId));
+  Future<void> supprimerLecon(String leconId) => supprimer(
+        ApiEndpoints.lecon(leconId),
+        contexte: 'La leçon n\'a pas pu être supprimée.',
+      );
 }

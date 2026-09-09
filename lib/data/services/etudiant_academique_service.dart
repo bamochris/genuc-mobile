@@ -577,37 +577,12 @@ class EtudiantAcademiqueService extends ServiceApi {
   }
 
   // ─── LMS (côté étudiant) ───────────────────────────────────
-
-  Future<List<Fiche>> chapitres(String coursId) =>
-      listeDe(ApiEndpoints.lmsChapitres(coursId));
-
-  Future<Fiche> maProgression(String coursId) =>
-      ficheDe(ApiEndpoints.lmsProgression(coursId));
-
-  Future<Fiche> marquerChapitreVu(String chapitreId) =>
-      poster(ApiEndpoints.lmsChapitreMarquerVu(chapitreId));
-
-  Future<List<Fiche>> devoirsDuCours(String coursId) =>
-      listeDe(ApiEndpoints.lmsDevoirs(coursId));
-
-  Future<Fiche> soumettreDevoir({
-    required String devoirId,
-    required String cheminFichier,
-    required String nomFichier,
-    String? commentaire,
-  }) async {
-    final formulaire = FormData.fromMap({
-      'commentaire': ?commentaire,
-      'fichier': await MultipartFile.fromFile(
-        cheminFichier,
-        filename: nomFichier,
-      ),
-    });
-
-    return poster(
-      ApiEndpoints.lmsDevoirSoumettre(devoirId),
-      corps: formulaire,
-      contexte: 'Le devoir n\'a pas pu être soumis.',
-    );
-  }
+  //
+  // RETIRÉ le 09/09/2026, comme sur le web. Les cinq méthodes (`chapitres`,
+  // `maProgression`, `marquerChapitreVu`, `devoirsDuCours`, `soumettreDevoir`)
+  // ne servaient que `ApprendreCoursScreen`, et toutes tapaient dans la façade
+  // `LMSService` : les lectures rendaient une liste vide quoi qu'il arrive, les
+  // écritures levaient une erreur. Ce que l'étudiant doit lire — leçons,
+  // supports, avancement — se trouve sur la fiche du cours ; ce qu'il doit
+  // rendre passe par « Mes travaux » (`/api/travaux`).
 }

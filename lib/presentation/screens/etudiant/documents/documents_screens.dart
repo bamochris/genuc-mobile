@@ -560,10 +560,11 @@ class _VisuelCarte extends StatelessWidget {
               const SizedBox(width: 24),
               _ChampCarte(
                 libelle: 'Année',
-                valeur: carte.texte(
-                  'anneeAcademique',
-                  defaut: anneeAcademiqueCourante(),
-                ),
+                // « — » et non une année déduite de l'horloge : une carte
+                // d'étudiant est une PIÈCE. Y imprimer une année que le
+                // serveur n'a pas donnée, c'est la faire mentir — et le
+                // porteur n'a aucun moyen de s'en apercevoir.
+                valeur: carte.texte('anneeAcademique', defaut: '—'),
               ),
             ],
           ),

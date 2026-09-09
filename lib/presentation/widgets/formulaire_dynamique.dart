@@ -376,6 +376,80 @@ class _DialogueFormulaireState extends State<DialogueFormulaire> {
 
 /// Sélecteur de cours réutilisable : la quasi-totalité des écrans enseignant
 /// commence par « choisissez un cours ».
+/// Sélecteur d'année académique, alimenté par le RÉFÉRENTIEL de
+/// l'établissement.
+///
+/// Liste fermée, jamais un champ de saisie libre : « 2026–2027 » avec un tiret
+/// long est un libellé que le serveur ne reconnaîtra nulle part, et l'écran
+/// répondra « aucune note » sans rien expliquer.
+///
+/// L'année ouverte porte la mention « (en cours) ». Quand l'établissement n'en
+/// a déclaré aucune, le sélecteur le DIT et reste vide — c'est ce qui empêche
+/// d'écrire sous un exercice inventé.
+class SelecteurAnnee extends StatelessWidget {
+  final String? valeur;
+
+  /// Libellés, du plus récent au plus ancien.
+  final List<String> annees;
+
+  /// Année ouverte de l'établissement, chaîne vide s'il n'en a aucune.
+  final String anneeActive;
+
+  final bool chargement;
+  final ValueChanged<String?> onChange;
+  final String libelle;
+
+  const SelecteurAnnee({
+    super.key,
+    required this.valeur,
+    required this.annees,
+    required this.anneeActive,
+    required this.onChange,
+    this.chargement = false,
+    this.libelle = 'Année académique',
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final vide = annees.isEmpty;
+    return DropdownButtonFormField<String>(
+      initialValue: annees.contains(valeur) ? valeur : null,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: libelle,
+        prefixIcon: Icon(
+          Icons.event_note_rounded,
+          size: 18,
+          color: AppTheme.iconAccent(context),
+        ),
+        helperText: anneeActive.isEmpty && !chargement && !vide
+            ? 'Aucune année n\'est ouverte : les libellés proposés viennent du '
+                'calendrier.'
+            : null,
+        helperMaxLines: 2,
+      ),
+      hint: Text(
+        chargement
+            ? 'Chargement…'
+            : vide
+                ? 'Aucune année académique ouverte'
+                : '— Sélectionner —',
+      ),
+      items: [
+        for (final a in annees)
+          DropdownMenuItem(
+            value: a,
+            child: Text(
+              a == anneeActive ? '$a (en cours)' : a,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+      ],
+      onChanged: chargement || vide ? null : onChange,
+    );
+  }
+}
+
 class SelecteurCours extends StatelessWidget {
   final String? valeur;
   final Map<String, String> cours;

@@ -245,6 +245,14 @@ class ApiEndpoints {
   // ─── Référentiel ───────────────────────────────────────────
   static const String universites = '/api/universites';
   static const String anneesAcademiques = '/api/annees-academiques';
+
+  /// Années actives ET clôturées de l'établissement.
+  ///
+  /// Réservée à `ADMIN_UNIVERSITE` et `CHEF_DEPARTEMENT` : la route ci-dessus
+  /// ne rend que les années ACTIVES, ce qui suffit à l'étudiant et à
+  /// l'enseignant mais rendrait l'historique illisible pour qui l'administre.
+  static const String anneesAcademiquesToutes =
+      '/api/annees-academiques/toutes';
   /// Filières d'un établissement, pour l'ADMINISTRATION de cet établissement.
   ///
   /// Réservée à ADMIN_UNIVERSITE, CHEF_DEPARTEMENT et SECRETAIRE_ACADEMIQUE,
@@ -268,17 +276,20 @@ class ApiEndpoints {
       '/api/promotions/universite/$universiteId';
 
   // ─── LMS ───────────────────────────────────────────────────
-  static String lmsChapitres(String coursId) => '/api/lms/cours/$coursId/chapitres';
-  static String lmsDevoirs(String coursId) => '/api/lms/cours/$coursId/devoirs';
-  static String lmsProgression(String coursId) =>
-      '/api/lms/cours/$coursId/ma-progression';
-  static String lmsStatistiques(String coursId) =>
-      '/api/lms/cours/$coursId/statistiques';
-  static String lmsChapitreMarquerVu(String chapitreId) =>
-      '/api/lms/chapitres/$chapitreId/marquer-vu';
-  static String lmsChapitre(String chapitreId) => '/api/lms/chapitres/$chapitreId';
-  static String lmsDevoirSoumettre(String devoirId) =>
-      '/api/lms/devoirs/$devoirId/soumettre';
+  //
+  // Les sept routes `/api/lms/…` ont été RETIRÉES (09/09/2026), à la suite du
+  // même constat côté web. Elles sont servies par `LMSService`, une façade :
+  //   · `chapitres`, `devoirs`, `ma-progression` rendent TOUJOURS une liste
+  //     vide, quoi qu'on y dépose ;
+  //   · `statistiques` rend des zéros codés en dur — « 0 étudiant, 0 % de
+  //     complétion » sur un cours suivi n'est pas un écran vide, c'est un
+  //     écran faux ;
+  //   · toutes les écritures (ajout de chapitre, suppression, « marquer vu »,
+  //     création et remise de devoir) lèvent `ModuleNonImplementeException`.
+  //
+  // Le contenu d'un cours vit dans les LEÇONS (`/api/cours/{id}/lecons`,
+  // ci-dessous) et les devoirs dans les TRAVAUX (`/api/travaux`) : deux
+  // circuits qui persistent réellement.
 
   // ─── Bibliothèque ──────────────────────────────────────────
   static String bibliothequeOuvrages(String universiteId) =>
@@ -389,6 +400,16 @@ class ApiEndpoints {
       '/api/cours/$coursId/publier';
   static String coursEtudiants(String coursId) => '/api/cours/$coursId/etudiants';
   static String coursSupports(String coursId) => '/api/cours/$coursId/supports';
+
+  /// Les leçons d'un cours — le VRAI contenu, celui que l'étudiant lit sur la
+  /// fiche du cours.
+  ///
+  /// À ne pas confondre avec les « chapitres » de `/api/lms/…`, qui n'ont
+  /// jamais rien persisté : l'enseignant y écrivait dans le vide pendant que
+  /// l'étudiant lisait `cours.lecons`, alimenté par ce POST-ci que plus
+  /// personne n'appelait.
+  static String coursLecons(String coursId) => '/api/cours/$coursId/lecons';
+  static String lecon(String leconId) => '/api/cours/lecons/$leconId';
   static String support(String supportId) => '/api/cours/supports/$supportId';
 
   /// Le FICHIER d'un support, servi après contrôle d'accès.

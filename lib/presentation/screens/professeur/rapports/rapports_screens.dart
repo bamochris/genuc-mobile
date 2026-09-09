@@ -7,6 +7,7 @@ import '../../../../core/utils/formatters.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../data/services/appel_api.dart';
 import '../../../../data/services/professeur_pedagogie_service.dart';
+import '../../../providers/annees_academiques_provider.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../widgets/formulaire_dynamique.dart';
 import '../../../widgets/portail_widgets.dart';
@@ -32,7 +33,10 @@ class RapportProfesseurScreen extends StatefulWidget {
 class _RapportProfesseurScreenState extends State<RapportProfesseurScreen> {
   Map<String, String> _cours = const {};
   String? _coursId;
-  String _annee = anneeAcademiqueCourante();
+  /// Référentiel de l'établissement, jamais l'horloge de l'appareil : les
+  /// rapports filtrent sur l'ÉGALITÉ du libellé d'année, et un libellé
+  /// inventé rend des totaux à zéro sans la moindre erreur.
+  String? _annee;
 
   List<Fiche> _notes = const [];
   List<Fiche> _seances = const [];
@@ -47,13 +51,20 @@ class _RapportProfesseurScreenState extends State<RapportProfesseurScreen> {
   }
 
   Future<void> _charger() async {
-    final professeurId = context.read<AuthProvider>().user?.id ?? '';
+    final auth = context.read<AuthProvider>();
+    final professeurId = auth.user?.id ?? '';
     final service = context.read<ProfesseurPedagogieService>();
 
     setState(() {
       _chargement = true;
       _erreur = null;
     });
+
+    final referentiel = context.read<AnneesAcademiquesProvider>();
+    await referentiel.charger(role: auth.user?.role);
+    if (!mounted) return;
+    setState(() => _annee ??= referentiel.anneeParDefaut);
+
     try {
       final cours = await service.mesCours(professeurId);
       // Le rapport de présences ne dépend pas d'un cours : il lit
@@ -89,13 +100,22 @@ class _RapportProfesseurScreenState extends State<RapportProfesseurScreen> {
 
   Future<void> _chargerNotes() async {
     final coursId = _coursId;
+    final annee = _annee;
     if (coursId == null) return;
+    if (annee == null) {
+      setState(() {
+        _notes = const [];
+        _erreur = 'Aucune année académique n\'est ouverte pour votre '
+            'établissement.';
+      });
+      return;
+    }
 
     setState(() => _chargementDetail = true);
     try {
       final notes = await context
           .read<ProfesseurPedagogieService>()
-          .notesDuCours(coursId, _annee);
+          .notesDuCours(coursId, annee);
       if (!mounted) return;
       setState(() {
         _notes = notes;
@@ -122,7 +142,7 @@ class _RapportProfesseurScreenState extends State<RapportProfesseurScreen> {
       titre: _titre,
       sousTitre: widget.type == TypeRapport.presences
           ? 'Assiduité par cours'
-          : '$_annee · ${_cours[_coursId] ?? 'aucun cours choisi'}',
+          : '${_annee ?? 'aucune année ouverte'} · ${_cours[_coursId] ?? 'aucun cours choisi'}',
       onRafraichir: _charger,
       corps: EtatRequete(
         chargement: _chargement,
@@ -146,17 +166,20 @@ class _RapportProfesseurScreenState extends State<RapportProfesseurScreen> {
                       },
                     ),
                     const SizedBox(height: 14),
-                    TextFormField(
-                      initialValue: _annee,
-                      decoration: const InputDecoration(
-                        labelText: 'Année académique',
-                        hintText: '2025-2026',
-                      ),
-                      onFieldSubmitted: (v) {
-                        setState(() => _annee = v.trim());
-                        _chargerNotes();
-                      },
-                    ),
+                    Builder(builder: (context) {
+                      final referentiel =
+                          context.watch<AnneesAcademiquesProvider>();
+                      return SelecteurAnnee(
+                        valeur: _annee,
+                        annees: referentiel.annees,
+                        anneeActive: referentiel.anneeActive,
+                        chargement: referentiel.chargement,
+                        onChange: (v) {
+                          setState(() => _annee = v);
+                          _chargerNotes();
+                        },
+                      );
+                    }),
                   ],
                 ),
               ),

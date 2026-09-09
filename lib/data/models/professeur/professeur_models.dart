@@ -114,6 +114,14 @@ class PresenceParCours {
 /// `upcoming`.
 class SeanceProfesseur {
   final int id;
+
+  /// Le cours dont cette séance est un créneau.
+  ///
+  /// Nul sur un horaire orphelin (le cours a été supprimé). C'est la clé qui
+  /// permet de rapprocher l'emploi du temps de la liste « Mes cours » : sans
+  /// elle, les deux vues parlaient du même cours sans pouvoir se rejoindre.
+  final int? coursId;
+
   final String titre;
 
   /// Code du cours. Servi par `/planning` (où la grille web affiche
@@ -141,6 +149,7 @@ class SeanceProfesseur {
 
   SeanceProfesseur({
     required this.id,
+    this.coursId,
     required this.titre,
     this.code,
     this.heureDebut,
@@ -156,6 +165,7 @@ class SeanceProfesseur {
   factory SeanceProfesseur.fromJson(Map<String, dynamic> json) {
     return SeanceProfesseur(
       id: (json['id'] ?? 0).toInt(),
+      coursId: (json['coursId'] as num?)?.toInt(),
       titre: json['titre'] ?? 'Cours',
       code: json['code'],
       heureDebut: json['heureDebut'],

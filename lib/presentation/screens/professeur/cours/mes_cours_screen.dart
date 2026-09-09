@@ -8,9 +8,11 @@ import '../../../../core/utils/responsive.dart';
 import '../../../../data/services/appel_api.dart';
 import '../../../../data/services/commun_service.dart';
 import '../../../../data/services/professeur_pedagogie_service.dart';
+import '../../../../data/models/professeur/professeur_models.dart';
+import '../../../../data/services/professeur_service.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../widgets/portail_widgets.dart';
-import '../lms/lms_screens.dart';
+import 'contenu_cours_screen.dart';
 import 'etudiants_cours_screen.dart';
 import 'supports_screen.dart';
 
@@ -23,6 +25,62 @@ const Map<String, (String, Color, IconData)> statutsCours = {
   'TERMINE': ('Terminé', AppTheme.statutNavy, Icons.check_circle_rounded),
   'BROUILLON': ('Brouillon', AppTheme.statutNavy, Icons.edit_rounded),
 };
+
+/// Un créneau du cours : jour, heure, salle, vacation.
+///
+/// ─── D'OÙ VIENT UN CRÉNEAU ──────────────────────────────────────────────────
+///
+/// Deux tables peuvent en porter un, et elles ne se remplissent pas au même
+/// moment :
+///
+///   · `horaire`        — l'emploi du temps proprement dit, celui que lisent la
+///                        grille de l'étudiant, celle de la promotion et celle
+///                        de l'enseignant. Il porte AUSSI la vacation.
+///   · `cours_vacation` — la composition du programme d'une vacation. Son
+///                        `professeur_id` est FACULTATIF à la création.
+///
+/// Cet écran n'interrogeait que la seconde, filtrée sur `professeur_id` :
+/// quand le secrétaire compose la vacation sans désigner l'enseignant sur la
+/// ligne — le cas ordinaire — la réponse est VIDE. Le bloc « Mes cours par
+/// vacation » n'était alors pas rendu du tout (condition `isNotEmpty`), et
+/// l'absence passait inaperçue : l'enseignant qui a pourtant un emploi du
+/// temps ne voyait ni créneau ni vacation, sans rien qui le lui dise.
+///
+/// On lit donc les DEUX sources et on les fusionne, l'emploi du temps d'abord.
+class Creneau {
+  final String coursId;
+  final String? jour;
+  final String? heureDebut;
+  final String? heureFin;
+  final String? salle;
+  final String? vacationId;
+  final String? vacationNom;
+
+  const Creneau({
+    required this.coursId,
+    this.jour,
+    this.heureDebut,
+    this.heureFin,
+    this.salle,
+    this.vacationId,
+    this.vacationNom,
+  });
+
+  /// Deux lignes décrivent la même séance quand elles portent le même cours,
+  /// le même jour et la même heure de début.
+  String get cle => '$coursId|${jour ?? ''}|${heureDebut ?? ''}';
+
+  String get libelleHoraire {
+    final heures = [heureDebut, heureFin]
+        .where((h) => h != null && h.isNotEmpty)
+        .join('–');
+    return [
+      if (jour != null && jour!.isNotEmpty) libelleJour(jour!),
+      if (heures.isNotEmpty) heures,
+      if (salle != null && salle!.isNotEmpty) salle,
+    ].join(' · ');
+  }
+}
 
 /// Volume horaire d'un cours, tel qu'il se lit sur une carte.
 ///
@@ -70,8 +128,18 @@ class MesCoursProfesseurScreen extends StatefulWidget {
 
 class _MesCoursProfesseurScreenState extends State<MesCoursProfesseurScreen> {
   List<Fiche> _cours = const [];
-  List<Fiche> _coursVacation = const [];
-  Map<String, String> _typeParVacation = const {};
+
+  /// Créneaux fusionnés, indexés par identifiant de cours.
+  ///
+  /// La clé est normalisée en CHAÎNE : des deux côtés c'est un identifiant
+  /// numérique, et un `Map` ne rapproche pas 12 de « 12 ».
+  Map<String, List<Creneau>> _creneauxParCours = const {};
+
+  /// Le type JOUR / SOIR se lit sur la vacation. L'emploi du temps n'en donne
+  /// que le NOM : on l'indexe donc par id ET par nom, faute de quoi une séance
+  /// d'horaire resterait sans vacation affichable.
+  Map<String, String> _typeParVacationId = const {};
+  Map<String, String> _typeParVacationNom = const {};
 
   bool _chargement = true;
   bool _publication = false;
@@ -92,6 +160,7 @@ class _MesCoursProfesseurScreenState extends State<MesCoursProfesseurScreen> {
   Future<void> _charger() async {
     final auth = context.read<AuthProvider>();
     final service = context.read<ProfesseurPedagogieService>();
+    final professeur = context.read<ProfesseurService>();
     final commun = context.read<CommunService>();
     final professeurId = auth.user?.id ?? '';
     final universiteId = auth.user?.universiteId;
@@ -117,24 +186,115 @@ class _MesCoursProfesseurScreenState extends State<MesCoursProfesseurScreen> {
       });
     }
 
-    // Vacations : accessoire. Leur échec ne doit pas vider la liste des cours,
+    // Créneaux : accessoires. Leur échec ne doit pas vider la liste des cours,
     // qui est l'information principale de l'écran.
+    //
+    // Chaque source est attendue SÉPARÉMENT : l'emploi du temps ne doit pas
+    // disparaître parce que la liste des vacations a échoué, et inversement.
+    // `catchError` ne conviendrait pas : ces méthodes rendent un type NON
+    // nullable, et `(_) => null` ne compile pas. Un `try/catch` par source.
+    List<JourPlanning>? planning;
     try {
-      final parVacation = await service.coursParVacation(professeurId);
-      final vacations = universiteId == null
-          ? <Fiche>[]
-          : await commun.vacationsActives(universiteId);
-      if (!mounted) return;
-      setState(() {
-        _coursVacation = parVacation;
-        _typeParVacation = {
-          for (final v in vacations) v.id: v.texte('type'),
-        };
-      });
+      planning = await professeur.getPlanning(professeurId);
     } catch (_) {
-      if (!mounted) return;
-      setState(() => _coursVacation = const []);
+      planning = null;
     }
+
+    List<Fiche>? parVacation;
+    try {
+      parVacation = await service.coursParVacation(professeurId);
+    } catch (_) {
+      parVacation = null;
+    }
+
+    var vacations = <Fiche>[];
+    if (universiteId != null) {
+      try {
+        vacations = await commun.vacationsActives(universiteId);
+      } catch (_) {
+        vacations = <Fiche>[];
+      }
+    }
+
+    if (!mounted) return;
+
+    final fusion = <String, List<Creneau>>{};
+    final vus = <String>{};
+    void ajouter(Creneau c) {
+      if (c.coursId.isEmpty) return;
+      if (!vus.add(c.cle)) return;
+      fusion.putIfAbsent(c.coursId, () => []).add(c);
+    }
+
+    // 1. L'emploi du temps : la source principale.
+    for (final jour in planning ?? const <JourPlanning>[]) {
+      for (final seance in jour.seances) {
+        if (seance.coursId == null) continue;
+        ajouter(Creneau(
+          coursId: '${seance.coursId}',
+          jour: jour.jour,
+          heureDebut: seance.heureDebut,
+          heureFin: seance.heureFin,
+          salle: seance.salle,
+          vacationNom: seance.vacationNom,
+        ));
+      }
+    }
+
+    // 2. La composition des vacations, pour les lignes où l'enseignant EST
+    //    désigné. Ce qui s'y trouve déjà au même jour et à la même heure n'est
+    //    pas ajouté deux fois.
+    for (final cv in parVacation ?? const <Fiche>[]) {
+      final coursId = cv.texte('coursId');
+      if (coursId.isEmpty) continue;
+      ajouter(Creneau(
+        coursId: coursId,
+        jour: cv.texteOuNul('jour'),
+        heureDebut: cv.texteOuNul('heureDebut'),
+        heureFin: cv.texteOuNul('heureFin'),
+        salle: cv.texteOuNul('salle'),
+        vacationId: cv.texteOuNul('vacationId'),
+        vacationNom: cv.texteOuNul('vacationNom'),
+      ));
+    }
+
+    setState(() {
+      _creneauxParCours = fusion;
+      _typeParVacationId = {
+        for (final v in vacations)
+          if (v.id.isNotEmpty) v.id: v.texte('type'),
+      };
+      _typeParVacationNom = {
+        for (final v in vacations)
+          if (v.texte('nom').isNotEmpty) v.texte('nom'): v.texte('type'),
+      };
+    });
+
+    if (planning == null && parVacation == null) {
+      setState(() {
+        _message = 'Vos créneaux n\'ont pas pu être chargés.';
+        _messageSucces = false;
+      });
+    }
+  }
+
+  /// Type de vacation d'un créneau : par identifiant, sinon par nom.
+  String? _typeVacation(Creneau c) {
+    final parId = c.vacationId == null ? null : _typeParVacationId[c.vacationId];
+    if (parId != null && parId.isNotEmpty) return parId;
+    final parNom =
+        c.vacationNom == null ? null : _typeParVacationNom[c.vacationNom];
+    return parNom == null || parNom.isEmpty ? null : parNom;
+  }
+
+  /// Étiquette de vacation à afficher : « Jour » / « Soir » quand le type est
+  /// connu, sinon le NOM de la vacation — mieux vaut « Vacation A » que rien.
+  String? _libelleVacation(Creneau c) {
+    final type = _typeVacation(c);
+    if (type == 'JOUR') return 'Jour';
+    if (type == 'SOIR') return 'Soir';
+    final nom = c.vacationNom;
+    return nom == null || nom.isEmpty ? null : nom;
   }
 
   List<Fiche> get _filtres {
@@ -145,7 +305,12 @@ class _MesCoursProfesseurScreenState extends State<MesCoursProfesseurScreen> {
           c.texte('code').toLowerCase().contains(terme);
       final statut = _filtreStatut == null || c.texte('statut') == _filtreStatut;
       final niveau = _filtreNiveau == null || c.texte('niveau') == _filtreNiveau;
-      return correspond && statut && niveau;
+      // Un cours est retenu dès qu'UN de ses créneaux est de la vacation
+      // demandée : le même cours peut se donner en journée et en soirée.
+      final vacation = _filtreVacation == null ||
+          (_creneauxParCours[c.id] ?? const <Creneau>[])
+              .any((cr) => _typeVacation(cr) == _filtreVacation);
+      return correspond && statut && niveau && vacation;
     }).toList();
   }
 
@@ -348,17 +513,24 @@ class _MesCoursProfesseurScreenState extends State<MesCoursProfesseurScreen> {
                   ],
                   onChange: (v) => setState(() => _filtreNiveau = v),
                 ),
+                // Le bloc « Mes cours par vacation » a disparu : le créneau et
+                // la vacation sont désormais portés par la ligne du cours
+                // lui-même, et son filtre a rejoint cette barre. Une donnée,
+                // un endroit — et surtout, un cours sans créneau se voit,
+                // alors qu'un bloc rendu sous condition `isNotEmpty`
+                // disparaissait en silence.
+                FiltreDeroulant<String>(
+                  libelle: 'Vacation',
+                  valeur: _filtreVacation,
+                  options: const [
+                    DropdownMenuItem(value: null, child: Text('Toutes')),
+                    DropdownMenuItem(value: 'JOUR', child: Text('Jour')),
+                    DropdownMenuItem(value: 'SOIR', child: Text('Soir')),
+                  ],
+                  onChange: (v) => setState(() => _filtreVacation = v),
+                ),
               ],
             ),
-            if (_coursVacation.isNotEmpty) ...[
-              _SectionVacations(
-                coursVacation: _coursVacation,
-                typeParVacation: _typeParVacation,
-                filtre: _filtreVacation,
-                onFiltre: (v) => setState(() => _filtreVacation = v),
-              ),
-              const SizedBox(height: 20),
-            ],
             if (_filtres.isEmpty)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 40),
@@ -372,6 +544,8 @@ class _MesCoursProfesseurScreenState extends State<MesCoursProfesseurScreen> {
               for (final cours in _filtres) ...[
                 _CarteCours(
                   cours: cours,
+                  creneaux: _creneauxParCours[cours.id] ?? const [],
+                  libelleVacation: _libelleVacation,
                   onPublier: _peutPublier && !_publication
                       ? () => _publier(cours)
                       : null,
@@ -388,11 +562,23 @@ class _MesCoursProfesseurScreenState extends State<MesCoursProfesseurScreen> {
 class _CarteCours extends StatelessWidget {
   final Fiche cours;
 
+  /// Séances de ce cours, fusionnées depuis l'emploi du temps et la
+  /// composition des vacations. Vide se DIT — c'est même le cas qu'il fallait
+  /// rendre visible.
+  final List<Creneau> creneaux;
+
+  final String? Function(Creneau) libelleVacation;
+
   /// Nul quand la publication n'est pas offerte : rôle sans le droit, ou
   /// publication déjà en cours.
   final VoidCallback? onPublier;
 
-  const _CarteCours({required this.cours, this.onPublier});
+  const _CarteCours({
+    required this.cours,
+    required this.creneaux,
+    required this.libelleVacation,
+    this.onPublier,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -496,6 +682,8 @@ class _CarteCours extends StatelessWidget {
               ),
             ],
           ),
+          const SizedBox(height: 10),
+          _BlocCreneaux(creneaux: creneaux, libelleVacation: libelleVacation),
           const SizedBox(height: 12),
           // Un cours naît en BROUILLON et reste invisible à sa promotion
           // tant qu'il n'est pas publié. Le geste n'existait que sur le
@@ -550,8 +738,8 @@ class _CarteCours extends StatelessWidget {
                   icon: const Icon(Icons.folder_rounded, size: 16),
                   label: const Text('Supports'),
                 ),
-                // Le contenu en ligne et son suivi appartiennent au cours :
-                // le web les monte aussi sous `cours/:id/…`, pas au menu.
+                // Le contenu d'un cours appartient au cours : le web le
+                // monte aussi sous `cours/:id/contenu`, pas au menu.
                 TextButton.icon(
                   onPressed: () => Navigator.of(context).push(
                     MaterialPageRoute(
@@ -564,18 +752,12 @@ class _CarteCours extends StatelessWidget {
                   icon: const Icon(Icons.auto_stories_rounded, size: 16),
                   label: const Text('Contenu'),
                 ),
-                TextButton.icon(
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => StatistiquesApprentissageScreen(
-                        coursId: cours.id,
-                        coursTitre: cours.texte('titre'),
-                      ),
-                    ),
-                  ),
-                  icon: const Icon(Icons.insights_rounded, size: 16),
-                  label: const Text('Suivi'),
-                ),
+                // Le bouton « Suivi » a été RETIRÉ. Il ouvrait un tableau de
+                // bord dont TOUTES les valeurs sont des zéros codés en dur
+                // côté serveur : l'enseignant y lisait « 0 étudiant, 0 % » sur
+                // un cours suivi et pouvait croire que personne ne le suivait.
+                // Ce n'était pas un écran vide, c'était un écran faux. Le
+                // suivi réel se lit sur les présences et sur « Travaux ».
               ],
             ),
           ),
@@ -615,106 +797,84 @@ class _Meta extends StatelessWidget {
   }
 }
 
-/// Cours de l'enseignant vus par vacation (jour / soir).
+/// Les créneaux d'un cours, sur sa carte.
 ///
-/// Une même promotion peut suivre le même cours en journée et en soirée : ce
-/// bloc dit lequel des deux, ce que la liste principale ne distingue pas.
-class _SectionVacations extends StatelessWidget {
-  final List<Fiche> coursVacation;
-  final Map<String, String> typeParVacation;
-  final String? filtre;
-  final ValueChanged<String?> onFiltre;
+/// Le VIDE est affiché, et c'est le point : quand cet écran n'interrogeait que
+/// `cours_vacation`, un enseignant sans ligne nominative dans la composition
+/// des vacations ne voyait ni créneau ni vacation, et rien ne le lui disait —
+/// le bloc entier disparaissait. Il faut pouvoir constater qu'un cours n'a
+/// aucune heure réservée : c'est une anomalie à signaler au secrétariat, pas
+/// un détail à masquer.
+class _BlocCreneaux extends StatelessWidget {
+  final List<Creneau> creneaux;
+  final String? Function(Creneau) libelleVacation;
 
-  const _SectionVacations({
-    required this.coursVacation,
-    required this.typeParVacation,
-    required this.filtre,
-    required this.onFiltre,
-  });
+  const _BlocCreneaux({required this.creneaux, required this.libelleVacation});
 
   @override
   Widget build(BuildContext context) {
-    final visibles = filtre == null
-        ? coursVacation
-        : coursVacation
-            .where((cv) => typeParVacation[cv.texte('vacationId')] == filtre)
-            .toList();
-
-    return CartePortail(
-      child: Column(
+    if (creneaux.isEmpty) {
+      return Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          EnteteSection(
-            titre: 'Mes cours par vacation',
-            icone: Icons.brightness_4_rounded,
-            action: FiltreDeroulant<String>(
-              libelle: 'Vacation',
-              valeur: filtre,
-              options: const [
-                DropdownMenuItem(value: null, child: Text('Toutes')),
-                DropdownMenuItem(value: 'JOUR', child: Text('Jour')),
-                DropdownMenuItem(value: 'SOIR', child: Text('Soir')),
-              ],
-              onChange: onFiltre,
-            ),
+          Icon(
+            Icons.event_busy_rounded,
+            size: 15,
+            color: AppTheme.textMutedOf(context),
           ),
-          if (visibles.isEmpty)
-            Text(
-              'Aucun cours pour ce filtre de vacation.',
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              'Aucun créneau à l\'emploi du temps.',
               style: TextStyle(
-                fontSize: 13,
+                fontSize: 12,
                 color: AppTheme.textMutedOf(context),
               ),
-            )
-          else
-            for (final cv in visibles)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            cv.texte('coursTitre'),
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                        if (typeParVacation[cv.texte('vacationId')] != null)
-                          Pastille(
-                            texte:
-                                typeParVacation[cv.texte('vacationId')] == 'JOUR'
-                                    ? 'Jour'
-                                    : 'Soir',
-                            couleur:
-                                typeParVacation[cv.texte('vacationId')] == 'JOUR'
-                                    ? AppTheme.statutVert
-                                    : AppTheme.statutViolet,
-                          ),
-                      ],
-                    ),
-                    Text(
-                      [
-                        cv.texte('vacationNom'),
-                        '${_libelleJour(cv.texte('jour'))} ${cv.texte('heureDebut')}'
-                            '–${cv.texte('heureFin')}',
-                        if (cv.texte('salle').isNotEmpty) cv.texte('salle'),
-                        cv.texte('promotionNom', defaut: '—'),
-                      ].where((t) => t.trim().isNotEmpty).join(' · '),
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: AppTheme.textMutedOf(context),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            ),
+          ),
         ],
-      ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final creneau in creneaux)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.schedule_rounded,
+                  size: 15,
+                  color: AppTheme.iconAccent(context),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    creneau.libelleHoraire.isEmpty
+                        ? 'Horaire non précisé'
+                        : creneau.libelleHoraire,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppTheme.textSecondaryOf(context),
+                    ),
+                  ),
+                ),
+                if (libelleVacation(creneau) != null) ...[
+                  const SizedBox(width: 6),
+                  Pastille(
+                    texte: libelleVacation(creneau)!,
+                    couleur: libelleVacation(creneau) == 'Soir'
+                        ? AppTheme.statutViolet
+                        : AppTheme.statutVert,
+                  ),
+                ],
+              ],
+            ),
+          ),
+      ],
     );
   }
 }
@@ -729,4 +889,7 @@ const Map<String, String> _joursFr = {
   'SUNDAY': 'Dimanche',
 };
 
-String _libelleJour(String code) => _joursFr[code.toUpperCase()] ?? code;
+/// Jour en toutes lettres. L'emploi du temps rend un `DayOfWeek` Java
+/// (« MONDAY ») ; la composition de vacation porte déjà un libellé. Un jour
+/// inconnu est rendu tel quel plutôt qu'effacé.
+String libelleJour(String code) => _joursFr[code.toUpperCase()] ?? code;

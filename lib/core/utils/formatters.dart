@@ -53,13 +53,21 @@ String formatDateObjet(DateTime? date, {bool avecHeure = false}) {
 /// Date du jour au format attendu par les contrôleurs (`LocalDate`).
 String dateIsoDuJour() => DateTime.now().toIso8601String().substring(0, 10);
 
-/// Année académique en cours, déduite de la date : le portail bascule en
-/// septembre, comme le calendrier universitaire congolais.
-String anneeAcademiqueCourante() {
-  final maintenant = DateTime.now();
-  final debut = maintenant.month >= 9 ? maintenant.year : maintenant.year - 1;
-  return '$debut-${debut + 1}';
-}
+// `anneeAcademiqueCourante()` a été RETIRÉE (09/09/2026).
+//
+// Elle déduisait l'année académique de l'horloge de l'appareil, et six écrans
+// du portail enseignant la posaient telle quelle dans l'URL de leurs appels.
+// Or l'année d'un établissement est une LIGNE de `annee_academique`, qu'il
+// ouvre et ferme lui-même : deux établissements peuvent en avoir deux
+// différentes le même jour, et aucun n'est tenu de nommer la sienne comme le
+// calendrier le suppose. Un libellé calculé qui ne correspond à rien ne
+// provoque pas d'erreur — il rend « aucune note », des rapports à zéro, et des
+// enregistrements rattachés à un exercice que personne n'a ouvert.
+//
+// La source de vérité est `AnneesAcademiquesProvider`
+// (`presentation/providers/annees_academiques_provider.dart`), qui lit le
+// référentiel et n'utilise le calendrier qu'en dernier repli, sans jamais
+// prétendre qu'une année est « en cours ».
 
 /// Libellé lisible d'une mention, aligné sur `constants/mentions.js`.
 String libelleMention(String? mention) {

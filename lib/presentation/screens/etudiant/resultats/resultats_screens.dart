@@ -7,6 +7,7 @@ import '../../../../core/utils/fichiers.dart';
 import '../../../../core/utils/formatters.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../data/services/appel_api.dart';
+import '../../../../data/services/commun_service.dart';
 import '../../../../data/services/etudiant_academique_service.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../widgets/formulaire_dynamique.dart';
@@ -507,6 +508,7 @@ class RecoursScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final service = context.read<EtudiantAcademiqueService>();
+    final commun = context.read<CommunService>();
     final utilisateurId = context.read<AuthProvider>().user?.id ?? '';
 
     return EcranRessource(
@@ -542,6 +544,20 @@ class RecoursScreen extends StatelessWidget {
               c.id: c.texte('nom', alias: const ['titre', 'intitule']),
           };
         },
+        // Les années DÉCLARÉES par l'établissement, pas une déduite du
+        // calendrier. Un recours déposé sous « 2026-2027 » quand l'exercice
+        // ouvert s'appelle autrement n'est rattaché à rien, et l'étudiant
+        // n'a aucun moyen de le savoir.
+        'anneeAcademique': () async {
+          final annees = await commun.anneesAcademiques();
+          return {
+            for (final a in annees)
+              if (a.texte('libelle').isNotEmpty)
+                a.texte('libelle'): a.booleen('active')
+                    ? '${a.texte('libelle')} (en cours)'
+                    : a.texte('libelle'),
+          };
+        },
       },
       champsCreation: [
         const ChampFormulaire(
@@ -562,10 +578,10 @@ class RecoursScreen extends StatelessWidget {
           libelle: 'Cours concerné',
           type: TypeChamp.liste,
         ),
-        ChampFormulaire(
+        const ChampFormulaire(
           cle: 'anneeAcademique',
           libelle: 'Année académique',
-          valeurInitiale: anneeAcademiqueCourante(),
+          type: TypeChamp.liste,
         ),
         const ChampFormulaire(
           cle: 'description',

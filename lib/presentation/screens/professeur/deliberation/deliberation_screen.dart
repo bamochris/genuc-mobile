@@ -7,6 +7,7 @@ import '../../../../core/utils/formatters.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../data/services/appel_api.dart';
 import '../../../../data/services/professeur_pedagogie_service.dart';
+import '../../../providers/annees_academiques_provider.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../widgets/formulaire_dynamique.dart';
 import '../../../widgets/portail_widgets.dart';
@@ -30,7 +31,10 @@ class _DeliberationProfesseurScreenState
     extends State<DeliberationProfesseurScreen> {
   Map<String, String> _cours = const {};
   String? _coursId;
-  String _annee = anneeAcademiqueCourante();
+  /// Lue dans le référentiel de l'établissement, jamais déduite de
+  /// l'horloge : `/api/notes/cours/{coursId}/{annee}` filtre sur l'ÉGALITÉ
+  /// du libellé, et une année inventée rend « aucune note » sans rien dire.
+  String? _annee;
 
   List<Fiche> _notes = const [];
   Fiche _stats = const Fiche({});
@@ -46,11 +50,18 @@ class _DeliberationProfesseurScreenState
   }
 
   Future<void> _charger() async {
-    final professeurId = context.read<AuthProvider>().user?.id ?? '';
+    final auth = context.read<AuthProvider>();
+    final professeurId = auth.user?.id ?? '';
     setState(() {
       _chargement = true;
       _erreur = null;
     });
+
+    final referentiel = context.read<AnneesAcademiquesProvider>();
+    await referentiel.charger(role: auth.user?.role);
+    if (!mounted) return;
+    setState(() => _annee ??= referentiel.anneeParDefaut);
+
     try {
       final cours = await context
           .read<ProfesseurPedagogieService>()
@@ -74,16 +85,26 @@ class _DeliberationProfesseurScreenState
 
   Future<void> _chargerNotes() async {
     final coursId = _coursId;
+    final annee = _annee;
     if (coursId == null) return;
+    if (annee == null) {
+      setState(() {
+        _notes = const [];
+        _stats = const Fiche({});
+        _erreur = 'Aucune année académique n\'est ouverte pour votre '
+            'établissement.';
+      });
+      return;
+    }
 
     setState(() => _chargementNotes = true);
     final service = context.read<ProfesseurPedagogieService>();
     // Les statistiques sont accessoires : leur absence ne doit pas priver
     // l'enseignant du tableau des notes, qui est l'objet de l'écran.
     try {
-      final notes = await service.notesDuCours(coursId, _annee);
+      final notes = await service.notesDuCours(coursId, annee);
       final stats = await service
-          .statistiquesNotes(coursId, _annee)
+          .statistiquesNotes(coursId, annee)
           .catchError((_) => const Fiche({}));
       if (!mounted) return;
       setState(() {
@@ -119,7 +140,7 @@ class _DeliberationProfesseurScreenState
 
     return PagePortail(
       titre: 'Délibération',
-      sousTitre: '$_annee · ${_cours[_coursId] ?? 'aucun cours choisi'}',
+      sousTitre: '${_annee ?? 'aucune année ouverte'} · ${_cours[_coursId] ?? 'aucun cours choisi'}',
       onRafraichir: _charger,
       corps: EtatRequete(
         chargement: _chargement,
@@ -142,17 +163,20 @@ class _DeliberationProfesseurScreenState
                     },
                   ),
                   const SizedBox(height: 14),
-                  TextFormField(
-                    initialValue: _annee,
-                    decoration: const InputDecoration(
-                      labelText: 'Année académique',
-                      hintText: '2025-2026',
-                    ),
-                    onFieldSubmitted: (v) {
-                      setState(() => _annee = v.trim());
-                      _chargerNotes();
-                    },
-                  ),
+                  Builder(builder: (context) {
+                    final referentiel =
+                        context.watch<AnneesAcademiquesProvider>();
+                    return SelecteurAnnee(
+                      valeur: _annee,
+                      annees: referentiel.annees,
+                      anneeActive: referentiel.anneeActive,
+                      chargement: referentiel.chargement,
+                      onChange: (v) {
+                        setState(() => _annee = v);
+                        _chargerNotes();
+                      },
+                    );
+                  }),
                 ],
               ),
             ),

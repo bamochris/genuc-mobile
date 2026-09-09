@@ -134,8 +134,17 @@ class CommunService extends ServiceApi {
 
   Future<List<Fiche>> universites() => listeDe(ApiEndpoints.universites);
 
-  Future<List<Fiche>> anneesAcademiques() =>
-      listeDe(ApiEndpoints.anneesAcademiques);
+  Future<List<Fiche>> anneesAcademiques() => listeDe(
+        ApiEndpoints.anneesAcademiques,
+        contexte: 'Les années académiques n\'ont pas pu être chargées.',
+      );
+
+  /// Années actives ET clôturées — 403 pour qui n'administre pas
+  /// l'établissement. L'appelant retombe alors sur [anneesAcademiques].
+  Future<List<Fiche>> anneesAcademiquesToutes() => listeDe(
+        ApiEndpoints.anneesAcademiquesToutes,
+        contexte: 'Les années académiques n\'ont pas pu être chargées.',
+      );
 
   /// Filières OUVERTES d'un établissement, quel qu'il soit.
   ///

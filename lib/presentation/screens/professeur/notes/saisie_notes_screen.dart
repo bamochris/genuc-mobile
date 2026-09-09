@@ -6,10 +6,10 @@ import 'package:provider/provider.dart';
 
 import '../../../../core/errors/api_exception.dart';
 import '../../../../core/theme/app_theme.dart';
-import '../../../../core/utils/formatters.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../data/services/appel_api.dart';
 import '../../../../data/services/professeur_pedagogie_service.dart';
+import '../../../providers/annees_academiques_provider.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../widgets/formulaire_dynamique.dart';
 import '../../../widgets/portail_widgets.dart';
@@ -66,7 +66,14 @@ class SaisieNotesScreen extends StatefulWidget {
 class _SaisieNotesScreenState extends State<SaisieNotesScreen> {
   Map<String, String> _cours = const {};
   String? _coursId;
-  late String _annee = anneeAcademiqueCourante();
+
+  /// C'est ici que l'année en dur coûtait le plus cher : cet écran enregistre
+  /// TOUT SEUL, cinq secondes après la dernière frappe, sur
+  /// `POST /api/notes/lot/{coursId}/{annee}`. Un enseignant qui saisissait sans
+  /// jamais toucher au champ écrivait ses notes sous un libellé déduit de
+  /// l'horloge de son téléphone — invisibles dans l'année qu'il enseigne si
+  /// son établissement ne l'a pas ouverte sous ce nom-là.
+  String? _annee;
 
   List<_SaisieEtudiant> _etudiants = [];
   bool _chargement = true;
@@ -101,6 +108,7 @@ class _SaisieNotesScreenState extends State<SaisieNotesScreen> {
       _chargement = true;
       _erreur = null;
     });
+    await _chargerAnnees();
     try {
       final cours = await _service.mesCours(_professeurId);
       if (!mounted) return;
@@ -122,11 +130,28 @@ class _SaisieNotesScreenState extends State<SaisieNotesScreen> {
     }
   }
 
+  /// L'année vient du référentiel de l'établissement, jamais du calendrier.
+  Future<void> _chargerAnnees() async {
+    final referentiel = context.read<AnneesAcademiquesProvider>();
+    await referentiel.charger(role: context.read<AuthProvider>().user?.role);
+    if (!mounted) return;
+    setState(() => _annee ??= referentiel.anneeParDefaut);
+  }
+
   Future<void> _chargerEtudiants() async {
     final coursId = _coursId;
+    final annee = _annee;
     if (coursId == null) {
       setState(() {
         _message = 'Sélectionnez d\'abord un cours.';
+        _messageSucces = false;
+      });
+      return;
+    }
+    if (annee == null) {
+      setState(() {
+        _message = 'Aucune année académique n\'est ouverte pour votre '
+            'établissement : la saisie est impossible.';
         _messageSucces = false;
       });
       return;
@@ -139,7 +164,7 @@ class _SaisieNotesScreenState extends State<SaisieNotesScreen> {
 
     try {
       final inscrits = await _service.etudiantsDuCours(coursId);
-      final notes = await _service.notesDuCours(coursId, _annee);
+      final notes = await _service.notesDuCours(coursId, annee);
 
       final parInscription = <String, Fiche>{
         for (final n in notes) n.texte('inscriptionId'): n,
@@ -183,15 +208,31 @@ class _SaisieNotesScreenState extends State<SaisieNotesScreen> {
 
   Future<void> _enregistrer({bool automatique = false}) async {
     final coursId = _coursId;
+    final annee = _annee;
     if (coursId == null || _etudiants.isEmpty) return;
     _minuterieAutoEnregistrement?.cancel();
+
+    // Garde-fou de l'enregistrement AUTOMATIQUE : sans année connue l'appel
+    // partirait sur `/api/notes/lot/12/` et ne rattacherait la saisie à rien.
+    // On ne prévient que sur un geste explicite — un message surgi de nulle
+    // part pendant la frappe serait plus déroutant qu'utile.
+    if (annee == null) {
+      if (!automatique) {
+        setState(() {
+          _message = 'Aucune année académique n\'est ouverte : '
+              'l\'enregistrement est impossible.';
+          _messageSucces = false;
+        });
+      }
+      return;
+    }
 
     if (automatique) setState(() => _enregistrementAuto = true);
 
     try {
       await _service.enregistrerNotes(
         coursId: coursId,
-        annee: _annee,
+        annee: annee,
         notes: _etudiants.map((e) => e.versJson(_professeurId)).toList(),
       );
       if (!mounted) return;
@@ -260,14 +301,22 @@ class _SaisieNotesScreenState extends State<SaisieNotesScreen> {
               }),
             ),
             const SizedBox(height: 12),
-            TextFormField(
-              initialValue: _annee,
-              decoration: const InputDecoration(
-                labelText: 'Année académique',
-                hintText: '2024-2025',
-              ),
-              onChanged: (v) => _annee = v,
-            ),
+            Builder(builder: (context) {
+              final referentiel = context.watch<AnneesAcademiquesProvider>();
+              return SelecteurAnnee(
+                valeur: _annee,
+                annees: referentiel.annees,
+                anneeActive: referentiel.anneeActive,
+                chargement: referentiel.chargement,
+                onChange: (v) => setState(() {
+                  _annee = v;
+                  // Les notes chargées appartiennent à l'année qu'on quitte :
+                  // les garder à l'écran ferait saisir dans la nouvelle par
+                  // dessus les valeurs de l'ancienne.
+                  _etudiants = [];
+                }),
+              );
+            }),
             const SizedBox(height: 12),
             LigneOuColonne(
               enfants: [

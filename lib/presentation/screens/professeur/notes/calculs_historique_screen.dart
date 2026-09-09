@@ -7,6 +7,7 @@ import '../../../../core/utils/formatters.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../data/services/appel_api.dart';
 import '../../../../data/services/professeur_pedagogie_service.dart';
+import '../../../providers/annees_academiques_provider.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../widgets/formulaire_dynamique.dart';
 import '../../../widgets/portail_widgets.dart';
@@ -50,12 +51,25 @@ class _CalculsNotesScreenState extends State<CalculsNotesScreen> {
   ProfesseurPedagogieService get _service =>
       context.read<ProfesseurPedagogieService>();
 
+  /// Année de repli quand le cours ne porte pas la sienne : celle du
+  /// RÉFÉRENTIEL de l'établissement, jamais un calcul d'horloge. Nulle quand
+  /// aucune année n'est ouverte — l'écran refuse alors d'enregistrer plutôt
+  /// que d'écrire sous un exercice inventé.
+  String? get _anneeDeRepli =>
+      context.read<AnneesAcademiquesProvider>().anneeParDefaut;
+
   Future<void> _chargerCours() async {
-    final professeurId = context.read<AuthProvider>().user?.id ?? '';
+    final auth = context.read<AuthProvider>();
+    final professeurId = auth.user?.id ?? '';
     setState(() {
       _chargement = true;
       _erreur = null;
     });
+
+    final referentiel = context.read<AnneesAcademiquesProvider>();
+    await referentiel.charger(role: auth.user?.role);
+    if (!mounted) return;
+
     try {
       final cours = await _service.mesCours(professeurId);
       if (!mounted) return;
@@ -68,7 +82,12 @@ class _CalculsNotesScreenState extends State<CalculsNotesScreen> {
         };
         _anneeParCours = {
           for (final c in cours)
-            c.id: c.texte('anneeAcademique', defaut: anneeAcademiqueCourante()),
+            if (c.texteOuNul('anneeAcademique') != null ||
+                referentiel.anneeParDefaut != null)
+              c.id: c.texte(
+                'anneeAcademique',
+                defaut: referentiel.anneeParDefaut ?? '',
+              ),
         };
         _chargement = false;
       });
@@ -87,7 +106,16 @@ class _CalculsNotesScreenState extends State<CalculsNotesScreen> {
       _message = null;
     });
 
-    final annee = _anneeParCours[coursId] ?? anneeAcademiqueCourante();
+    final annee = _anneeParCours[coursId] ?? _anneeDeRepli;
+    if (annee == null) {
+      setState(() {
+        _chargementDonnees = false;
+        _message = 'Aucune année académique n\'est ouverte pour votre '
+            'établissement.';
+        _messageSucces = false;
+      });
+      return;
+    }
 
     try {
       final inscrits = await _service.etudiantsDuCours(coursId);
@@ -276,7 +304,17 @@ class _CalculsNotesScreenState extends State<CalculsNotesScreen> {
     final coursId = _coursId;
     if (coursId == null || _lignes.isEmpty) return;
 
-    final annee = _anneeParCours[coursId] ?? anneeAcademiqueCourante();
+    // `lancerCalcul` ÉCRIT les notes calculées : sans année connue, elles
+    // atterriraient dans un exercice que personne n'a ouvert.
+    final annee = _anneeParCours[coursId] ?? _anneeDeRepli;
+    if (annee == null) {
+      setState(() {
+        _message = 'Aucune année académique n\'est ouverte : le calcul ne peut '
+            'pas être enregistré.';
+        _messageSucces = false;
+      });
+      return;
+    }
     try {
       await _service.lancerCalcul(coursId, annee: annee);
       if (!mounted) return;

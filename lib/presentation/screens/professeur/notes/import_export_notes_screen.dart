@@ -4,10 +4,10 @@ import 'package:provider/provider.dart';
 import '../../../../core/errors/api_exception.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/fichiers.dart';
-import '../../../../core/utils/formatters.dart';
 import '../../../../core/utils/responsive.dart';
 import '../../../../data/services/appel_api.dart';
 import '../../../../data/services/professeur_pedagogie_service.dart';
+import '../../../providers/annees_academiques_provider.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../widgets/formulaire_dynamique.dart';
 import '../../../widgets/portail_widgets.dart';
@@ -31,7 +31,10 @@ class ImportNotesScreen extends StatefulWidget {
 class _ImportNotesScreenState extends State<ImportNotesScreen> {
   Map<String, String> _cours = const {};
   String? _coursId;
-  late String _annee = anneeAcademiqueCourante();
+  /// Référentiel de l'établissement, jamais l'horloge : le libellé part
+  /// tel quel dans l'URL, et un exercice que personne n'a ouvert accepte
+  /// ou refuse sans rien expliquer.
+  String? _annee;
   FichierChoisi? _fichier;
 
   Fiche? _rapport;
@@ -70,6 +73,11 @@ class _ImportNotesScreenState extends State<ImportNotesScreen> {
       _chargement = true;
       _erreur = null;
     });
+
+    final referentiel = context.read<AnneesAcademiquesProvider>();
+    await referentiel.charger(role: context.read<AuthProvider>().user?.role);
+    if (mounted) setState(() => _annee ??= referentiel.anneeParDefaut);
+
     try {
       final cours = await _service.mesCours(_professeurId);
       if (!mounted) return;
@@ -120,14 +128,16 @@ class _ImportNotesScreenState extends State<ImportNotesScreen> {
               onChange: (v) => setState(() => _coursId = v),
             ),
             const SizedBox(height: 12),
-            TextFormField(
-              initialValue: _annee,
-              decoration: const InputDecoration(
-                labelText: 'Année académique',
-                hintText: '2024-2025',
-              ),
-              onChanged: (v) => setState(() => _annee = v),
-            ),
+            Builder(builder: (context) {
+              final referentiel = context.watch<AnneesAcademiquesProvider>();
+              return SelecteurAnnee(
+                valeur: _annee,
+                annees: referentiel.annees,
+                anneeActive: referentiel.anneeActive,
+                chargement: referentiel.chargement,
+                onChange: (v) => setState(() => _annee = v),
+              );
+            }),
             const SizedBox(height: 16),
             CartePortail(
               child: Column(
@@ -230,9 +240,18 @@ class _ImportNotesScreenState extends State<ImportNotesScreen> {
   Future<void> _analyser() async {
     final coursId = _coursId;
     final fichier = _fichier;
+    final annee = _annee;
     if (coursId == null || fichier == null) {
       setState(() {
         _message = 'Sélectionnez un cours et un fichier.';
+        _messageSucces = false;
+      });
+      return;
+    }
+    if (annee == null) {
+      setState(() {
+        _message = 'Aucune année académique n\'est ouverte pour votre '
+            'établissement : l\'import est impossible.';
         _messageSucces = false;
       });
       return;
@@ -249,7 +268,7 @@ class _ImportNotesScreenState extends State<ImportNotesScreen> {
       // dans le jeton.
       final rapport = await _service.analyserFichierNotes(
         coursId: coursId,
-        annee: _annee,
+        annee: annee,
         cheminFichier: fichier.chemin,
         nomFichier: fichier.nom,
       );
@@ -257,7 +276,7 @@ class _ImportNotesScreenState extends State<ImportNotesScreen> {
       setState(() {
         _rapport = rapport;
         _selectionAnalysee =
-            (coursId: coursId, annee: _annee, fichier: fichier.nom);
+            (coursId: coursId, annee: annee, fichier: fichier.nom);
         _traitement = false;
         _message = 'Analyse terminée — aucune note n\'a été enregistrée. '
             'Vérifiez le rapport avant de confirmer.';
@@ -276,13 +295,16 @@ class _ImportNotesScreenState extends State<ImportNotesScreen> {
   Future<void> _importer() async {
     final coursId = _coursId;
     final fichier = _fichier;
-    if (coursId == null || fichier == null) return;
+    final annee = _annee;
+    // Cette route ÉCRIT les lignes valides, même en cas d'échec partiel : sans
+    // année connue, elle les rattacherait à un exercice arbitraire.
+    if (coursId == null || fichier == null || annee == null) return;
 
     setState(() => _traitement = true);
     try {
       final resultat = await _service.importerNotes(
         coursId: coursId,
-        annee: _annee,
+        annee: annee,
         cheminFichier: fichier.chemin,
         nomFichier: fichier.nom,
       );
@@ -495,7 +517,10 @@ class ExportNotesScreen extends StatefulWidget {
 class _ExportNotesScreenState extends State<ExportNotesScreen> {
   Map<String, String> _cours = const {};
   String? _coursId;
-  late String _annee = anneeAcademiqueCourante();
+  /// Référentiel de l'établissement, jamais l'horloge : le libellé part
+  /// tel quel dans l'URL, et un exercice que personne n'a ouvert accepte
+  /// ou refuse sans rien expliquer.
+  String? _annee;
 
   bool _chargement = true;
   bool _export = false;
@@ -510,14 +535,21 @@ class _ExportNotesScreenState extends State<ExportNotesScreen> {
   }
 
   Future<void> _charger() async {
-    final professeurId = context.read<AuthProvider>().user?.id ?? '';
+    final auth = context.read<AuthProvider>();
+    final professeurId = auth.user?.id ?? '';
+    final pedagogie = context.read<ProfesseurPedagogieService>();
     setState(() {
       _chargement = true;
       _erreur = null;
     });
+
+    final referentiel = context.read<AnneesAcademiquesProvider>();
+    await referentiel.charger(role: auth.user?.role);
+    if (!mounted) return;
+    setState(() => _annee ??= referentiel.anneeParDefaut);
+
     try {
-      final cours =
-          await context.read<ProfesseurPedagogieService>().mesCours(professeurId);
+      final cours = await pedagogie.mesCours(professeurId);
       if (!mounted) return;
       setState(() {
         _cours = {
@@ -566,17 +598,20 @@ class _ExportNotesScreenState extends State<ExportNotesScreen> {
               onChange: (v) => setState(() => _coursId = v),
             ),
             const SizedBox(height: 12),
-            TextFormField(
-              initialValue: _annee,
-              decoration: const InputDecoration(
-                labelText: 'Année académique',
-                hintText: '2024-2025',
-              ),
-              onChanged: (v) => _annee = v,
-            ),
+            Builder(builder: (context) {
+              final referentiel = context.watch<AnneesAcademiquesProvider>();
+              return SelecteurAnnee(
+                valeur: _annee,
+                annees: referentiel.annees,
+                anneeActive: referentiel.anneeActive,
+                chargement: referentiel.chargement,
+                onChange: (v) => setState(() => _annee = v),
+              );
+            }),
             const SizedBox(height: 20),
             ElevatedButton.icon(
-              onPressed: _export || _coursId == null ? null : _exporter,
+              onPressed:
+                  _export || _coursId == null || _annee == null ? null : _exporter,
               icon: const Icon(Icons.download_rounded, size: 18),
               label: Text(_export ? 'Export en cours…' : 'Exporter en Excel'),
             ),
@@ -588,15 +623,16 @@ class _ExportNotesScreenState extends State<ExportNotesScreen> {
 
   Future<void> _exporter() async {
     final coursId = _coursId;
-    if (coursId == null) return;
+    final annee = _annee;
+    if (coursId == null || annee == null) return;
 
     setState(() => _export = true);
     try {
       final octets = await context
           .read<ProfesseurPedagogieService>()
-          .exporterNotes(coursId, _annee);
+          .exporterNotes(coursId, annee);
       final code = _cours[coursId]?.split(' – ').first ?? coursId;
-      await Fichiers.enregistrerEtOuvrir(octets, 'notes_${code}_$_annee.xlsx');
+      await Fichiers.enregistrerEtOuvrir(octets, 'notes_${code}_$annee.xlsx');
       if (!mounted) return;
       setState(() {
         _export = false;
