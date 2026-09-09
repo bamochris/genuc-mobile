@@ -203,8 +203,6 @@ class ApiService {
 
   // ─── Frais et paiements ────────────────────────────────────
 
-  Future<List<dynamic>> getPayments() => _getList(ApiEndpoints.paiements);
-
   // M3 CORRIGÉ : les données financières et l'emploi du temps
   // sont mises en cache pour éviter les rechargements inutiles.
   /// Situation financière : `GET /api/etudiant/frais/situation` (objet).

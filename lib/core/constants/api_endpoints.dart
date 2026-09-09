@@ -338,7 +338,18 @@ class ApiEndpoints {
   // (`FraisEtudiantController`) — `/api/frais-etudiant` n'existe pas.
   // Le chemin nu `/api/etudiant/frais` n'a aucun mapping : il faut toujours
   // la sous-route (`/situation`, `/a-payer`, `/historique`).
-  static const String paiements = '/api/paiements';
+  // Le chemin NU `/api/paiements` n'a volontairement aucun mapping GET :
+  // `PaiementController` n'expose que des routes BORNÉES —
+  // `/etudiant/inscription/{id}` et `/etudiant/situation/{id}` (gardées par
+  // `peutAccederInscription`), `/gestion/universite/{id}` (par
+  // `peutAccederUniversite`). Une liste nue rendrait les paiements de tous les
+  // établissements du pays, et c'est précisément le genre de lecture que
+  // l'audit OWASP a refermée.
+  //
+  // Il ne faut donc PAS l'ajouter côté serveur pour satisfaire un appelant :
+  // l'historique de l'étudiant connecté, c'est `historiquePaiements`
+  // ci-dessous, et le détail d'une inscription
+  // `/api/paiements/etudiant/inscription/{inscriptionId}`.
   static const String fraisSituation = '/api/etudiant/frais/situation';
   static const String fraisAPayer = '/api/etudiant/frais/a-payer';
   static const String historiquePaiements = '/api/etudiant/frais/historique';
