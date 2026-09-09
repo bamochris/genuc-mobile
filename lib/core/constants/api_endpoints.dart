@@ -291,6 +291,31 @@ class ApiEndpoints {
   // ci-dessous) et les devoirs dans les TRAVAUX (`/api/travaux`) : deux
   // circuits qui persistent réellement.
 
+  // ─── Délégation de cours ───────────────────────────────────
+  //
+  // AUCUN de ces chemins ne porte l'identifiant du titulaire, et c'est
+  // volontaire : le titulaire est TOUJOURS l'appelant. Accepter un
+  // `titulaireId` venu du client reviendrait à laisser ouvrir une délégation
+  // sur les cours d'un autre — le contrôle de propriété comparerait alors deux
+  // valeurs fournies par le même client, ce qui ne protège rien.
+  static const String delegations = '/api/delegations';
+
+  /// Ce que J'AI confié.
+  static const String mesDelegations = '/api/delegations/mes-delegations';
+
+  /// Ce pour quoi J'AGIS — la lecture qui alimente le bandeau permanent.
+  static const String delegationsPourMoi = '/api/delegations/pour-moi';
+
+  /// À qui puis-je déléguer : recherche, pas annuaire (deux caractères au
+  /// moins, vingt résultats au plus, jamais hors de mon établissement).
+  static const String delegationCollegues = '/api/delegations/collegues';
+
+  static String delegationRevoquer(String id) =>
+      '/api/delegations/$id/revoquer';
+
+  /// Ce qui a été fait en mon nom pendant cette délégation.
+  static String delegationActes(String id) => '/api/delegations/$id/actes';
+
   // ─── Bibliothèque ──────────────────────────────────────────
   static String bibliothequeOuvrages(String universiteId) =>
       '/api/bibliotheque/ouvrages/$universiteId';

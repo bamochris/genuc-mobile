@@ -207,6 +207,7 @@ void main() {
       '/professeur/mes-cours/supports',
       '/professeur/mes-cours/planning',
       '/professeur/mes-etudiants',
+      '/professeur/delegations',
       '/professeur/presences/smart',
       '/professeur/presences/qrcode',
       '/professeur/presences/saisie',

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../core/utils/formatters.dart';
 import '../../core/utils/responsive.dart';
+import '../../data/services/appel_api.dart';
 import '../navigation/portail_shell.dart';
 import 'etat_widgets.dart';
 import 'genuc_scaffold.dart';
@@ -67,6 +69,10 @@ class PagePortail extends StatelessWidget {
     // nuit de la barre de titre le libellé actif était presque invisible.
     final bandes = <Widget>[
       ?portail?.topbar,
+      // Le bandeau de délégation vient AVANT les volets du module : il ne
+      // qualifie pas la page, il qualifie la session. « Vous agissez pour X »
+      // doit se lire au-dessus de tout ce qui suit, sur chaque écran.
+      ?portail?.bandeauDelegation,
       ?portail?.ongletsModule,
       if (bottomAppBar != null) _BandeOnglets(onglets: bottomAppBar!),
     ];
@@ -471,6 +477,78 @@ class CartePortail extends StatelessWidget {
 /// Les fonds pastel du web (`#E8F8F2`, `#FEF3C7`…) sont recalculés à partir de
 /// la couleur au lieu d'être posés en dur : figés, ils devenaient des aplats
 /// clairs sous texte clair en thème sombre.
+/// « Vous agissez par délégation pour X, jusqu'au … ».
+///
+/// Permanent, sur toutes les pages du portail : le délégué se connecte avec son
+/// propre compte et voit les cours d'un collègue. Sans ce rappel, la délégation
+/// serait pire que le prêt de mot de passe qu'elle remplace — il croirait ces
+/// cours siens.
+///
+/// Plusieurs titulaires à la fois est un cas réel (un chef de travaux qui
+/// remplace deux professeurs) : ils sont tous nommés, faute de quoi le bandeau
+/// affirmerait une chose fausse à propos des autres.
+class BandeauDelegation extends StatelessWidget {
+  final List<Fiche> delegations;
+
+  const BandeauDelegation({super.key, required this.delegations});
+
+  @override
+  Widget build(BuildContext context) {
+    if (delegations.isEmpty) return const SizedBox.shrink();
+
+    final noms = delegations
+        .map((d) => d.texte('titulaireNom', defaut: 'un collègue'))
+        .toSet()
+        .toList();
+
+    // La fin la plus PROCHE : c'est la première échéance qui compte, celle
+    // après laquelle une partie de l'accès cesse.
+    final fins = delegations
+        .map((d) => d.texteOuNul('dateFin'))
+        .whereType<String>()
+        .toList()
+      ..sort();
+
+    final texte = StringBuffer('Vous agissez par délégation pour ')
+      ..write(noms.length == 1 ? noms.first : noms.join(', '));
+    if (fins.isNotEmpty) {
+      texte.write(', jusqu\'au ${formatDate(fins.first)}');
+    }
+    texte.write('.');
+
+    final (fond, accent) = AppTheme.pastilleDe(context, AppTheme.statutOrange);
+
+    return Material(
+      color: fond,
+      child: SafeArea(
+        top: false,
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.supervisor_account_rounded, size: 16, color: accent),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  texte.toString(),
+                  style: TextStyle(
+                    fontSize: 12,
+                    height: 1.35,
+                    fontWeight: FontWeight.w600,
+                    color: accent,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class Pastille extends StatelessWidget {
   final String texte;
   final Color couleur;

@@ -117,7 +117,9 @@ class _RappelAvancement extends StatelessWidget {
           Icon(
             Icons.info_rounded,
             size: 20,
-            color: AppTheme.statutBleu,
+            // Calculée sur le fond de la carte : le bleu de marque posé en
+            // dur descend sous 3:1 en thème sombre.
+            color: AppTheme.accentGraphique(context, AppTheme.statutBleu),
           ),
           const SizedBox(width: 10),
           Expanded(

@@ -456,6 +456,73 @@ class ProfesseurPedagogieService extends ServiceApi {
   Future<Fiche> majMonCompte(String utilisateurId, Map<String, dynamic> donnees) =>
       mettreAJour(ApiEndpoints.utilisateur(utilisateurId), corps: donnees);
 
+  // ─── Délégation de cours ───────────────────────────────────
+  //
+  // Un professeur absent donnait ses identifiants à son chef de travaux ou à
+  // son assistant : tout ce que faisait le remplaçant était alors signé du
+  // titulaire, et le mot de passe circulait. La délégation nominative la
+  // remplace — le délégué se connecte avec SON compte, et chaque écriture
+  // porte son identité réelle.
+
+  /// Ce que j'ai confié.
+  Future<List<Fiche>> mesDelegations() => listeDe(
+        ApiEndpoints.mesDelegations,
+        contexte: 'Vos délégations n\'ont pas pu être chargées.',
+      );
+
+  /// Ce pour quoi j'agis.
+  Future<List<Fiche>> delegationsPourMoi() => listeDe(
+        ApiEndpoints.delegationsPourMoi,
+        contexte: 'Les délégations reçues n\'ont pas pu être chargées.',
+      );
+
+  /// Collègues de mon établissement à qui déléguer. Sous deux caractères, le
+  /// serveur ne rend rien : c'est une recherche, pas un annuaire.
+  Future<List<Fiche>> colleguesDelegation(String recherche) => listeDe(
+        ApiEndpoints.delegationCollegues,
+        parametres: {'recherche': recherche},
+        contexte: 'La recherche n\'a pas abouti.',
+      );
+
+  /// [coursId] nul = TOUS mes cours.
+  ///
+  /// La date de fin est obligatoire et bornée à un an côté serveur : une
+  /// délégation sans terme est une cession de compte déguisée, elle survit à
+  /// l'absence qui l'a motivée et personne ne pense à la fermer.
+  Future<Fiche> ouvrirDelegation({
+    required String delegueId,
+    String? coursId,
+    required String dateDebut,
+    required String dateFin,
+    bool autoriseNotes = false,
+    String? motif,
+  }) =>
+      poster(
+        ApiEndpoints.delegations,
+        corps: {
+          'delegueId': delegueId,
+          'coursId': ?coursId,
+          'dateDebut': dateDebut,
+          'dateFin': dateFin,
+          'autoriseNotes': autoriseNotes,
+          'motif': ?motif,
+        },
+        contexte: 'La délégation n\'a pas pu être ouverte.',
+      );
+
+  /// Révocation par le titulaire, ou renoncement par le délégué. Rien ne se
+  /// « réactive » : on rouvre une délégation, pour que la trace reste lisible.
+  Future<Fiche> revoquerDelegation(String id) => corriger(
+        ApiEndpoints.delegationRevoquer(id),
+        contexte: 'La délégation n\'a pas pu être révoquée.',
+      );
+
+  /// Journal des actes posés en mon nom pendant la délégation.
+  Future<List<Fiche>> actesDelegation(String id) => listeDe(
+        ApiEndpoints.delegationActes(id),
+        contexte: 'Le journal n\'a pas pu être lu.',
+      );
+
   // ─── Contenu du cours : les leçons ─────────────────────────
   //
   // Ces trois méthodes remplacent les six anciennes de `/api/lms/…`

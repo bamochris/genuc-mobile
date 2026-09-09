@@ -31,6 +31,7 @@ import '../screens/professeur/cours/mes_cours_screen.dart';
 import '../screens/professeur/cours/planning_screen.dart';
 import '../screens/professeur/cours/supports_screen.dart';
 import '../screens/professeur/cours/travaux_screen.dart';
+import '../screens/professeur/delegations/delegations_screen.dart';
 import '../screens/professeur/deliberation/deliberation_screen.dart';
 import '../screens/professeur/encadrement/encadrement_screens.dart';
 import '../screens/professeur/evaluations/evaluations_screens.dart';
@@ -746,6 +747,15 @@ class MenuPortail {
             icone: Icons.school_rounded,
             couleur: _vert,
             construire: (_) => const MesEtudiantsScreen(),
+          ),
+          // Confier ses cours pendant une absence, sans prêter son compte.
+          Destination(
+            chemin: '/professeur/delegations',
+            libelle: 'Délégation',
+            icone: Icons.people_alt_rounded,
+            iconeContour: Icons.people_alt_outlined,
+            couleur: _violet,
+            construire: (_) => const DelegationsScreen(),
           ),
         ],
       ),

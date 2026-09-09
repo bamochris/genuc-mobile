@@ -3,7 +3,9 @@ import 'package:provider/provider.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/responsive.dart';
+import '../../data/services/appel_api.dart';
 import '../../data/services/commun_service.dart';
+import '../../data/services/professeur_pedagogie_service.dart';
 import '../../domain/entities/user.dart';
 import '../config/destinations.dart';
 import '../providers/auth_provider.dart';
@@ -35,6 +37,14 @@ class PortailScope extends InheritedWidget {
   /// barre de titre.
   final Widget? topbar;
 
+  /// Bandeau « vous agissez par délégation pour X », ou `null`.
+  ///
+  /// Il est PERMANENT, sur toutes les pages du portail. Sans lui, la
+  /// délégation serait pire que le prêt de mot de passe qu'elle remplace : le
+  /// délégué croirait ces cours siens, et n'aurait aucun moyen de savoir que
+  /// ce qu'il voit appartient à un collègue.
+  final Widget? bandeauDelegation;
+
   final List<Widget> actionsGlobales;
 
   /// Ouvre une destination par son chemin web.
@@ -51,6 +61,7 @@ class PortailScope extends InheritedWidget {
     required this.barreBasse,
     required this.ongletsModule,
     required this.topbar,
+    required this.bandeauDelegation,
     required this.actionsGlobales,
     required this.ouvrir,
     required this.cheminCourant,
@@ -86,6 +97,7 @@ class PortailScope extends InheritedWidget {
   bool updateShouldNotify(PortailScope ancien) =>
       ancien.cheminCourant != cheminCourant ||
       ancien.ongletsModule != ongletsModule ||
+      ancien.bandeauDelegation != bandeauDelegation ||
       ancien.barreBasse != barreBasse;
 }
 
@@ -113,12 +125,17 @@ class _PortailShellState extends State<PortailShell> {
   /// Modules ouverts par l'établissement. Vide = tout est actif.
   Map<String, bool> _modules = const {};
 
+  /// Délégations EN VIGUEUR dont je suis le délégué. Alimente le bandeau
+  /// permanent : le délégué doit savoir, sur chaque page, en quel nom il agit.
+  List<Fiche> _delegationsRecues = const [];
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _chargerEssentiels();
       _chargerModules();
+      _chargerDelegations();
     });
   }
 
@@ -148,6 +165,23 @@ class _PortailShellState extends State<PortailShell> {
       setState(() => _modules = modules);
     } catch (_) {
       // Échec = on n'ampute rien : un menu complet vaut mieux qu'un menu vide.
+    }
+  }
+
+  /// `/api/delegations/pour-moi` est ouvert à tout compte authentifié : un
+  /// compte doit toujours pouvoir savoir en quel nom il agit. L'appel est donc
+  /// fait pour tous les rôles, et son échec ne coûte rien — sans bandeau,
+  /// l'écran reste exactement ce qu'il était.
+  Future<void> _chargerDelegations() async {
+    try {
+      final recues =
+          await context.read<ProfesseurPedagogieService>().delegationsPourMoi();
+      if (!mounted) return;
+      setState(() => _delegationsRecues =
+          recues.where((d) => d.booleen('enVigueur')).toList());
+    } catch (_) {
+      // Rien : pas de bandeau plutôt qu'un message d'erreur sur toutes les
+      // pages du portail.
     }
   }
 
@@ -192,6 +226,9 @@ class _PortailShellState extends State<PortailShell> {
         barreBasse: _barreBasse(),
         ongletsModule: _ongletsModule(),
         topbar: _topbar(),
+        bandeauDelegation: _delegationsRecues.isEmpty
+            ? null
+            : BandeauDelegation(delegations: _delegationsRecues),
         actionsGlobales: _actionsGlobales(),
         ouvrir: _ouvrir,
         user: widget.user,
