@@ -708,7 +708,12 @@ class _ChampMotDePasse extends StatelessWidget {
       decoration: InputDecoration(
         labelText: label,
         suffixIcon: IconButton(
-          icon: Icon(showPassword ? Icons.visibility_off_rounded : Icons.visibility_rounded),
+          icon: Icon(showPassword
+              ? Icons.visibility_off_rounded
+              : Icons.visibility_rounded),
+          tooltip: showPassword
+              ? 'Masquer le mot de passe'
+              : 'Afficher le mot de passe',
           onPressed: onToggle,
         ),
         border: OutlineInputBorder(

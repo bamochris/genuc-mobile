@@ -588,7 +588,10 @@ class _TachPayEcranConfirmationState extends State<TachPayEcranConfirmation> {
                         trailing: _telechargement
                             ? const SizedBox(width: 20, height: 20,
                                 child: CircularProgressIndicator(strokeWidth: 2))
-                            : IconButton(icon: const Icon(Icons.download_rounded, color: AppTheme.primary),
+                            : IconButton(
+                                icon: const Icon(Icons.download_rounded,
+                                    color: AppTheme.primary),
+                                tooltip: 'Télécharger le bon ${bon.numero}',
                                 onPressed: () => _telechargerPdf(bon)),
                       )),
               ]),

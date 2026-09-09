@@ -613,6 +613,7 @@ class _NouvelleDelegationScreenState extends State<_NouvelleDelegationScreen> {
               hintText: 'Deux caractères au moins',
               suffixIcon: IconButton(
                 icon: const Icon(Icons.search_rounded),
+                tooltip: 'Chercher ce collègue',
                 onPressed: _cherche ? null : _chercher,
               ),
             ),
