@@ -5,7 +5,8 @@
 // Consomme les endpoints existants du backend (TachPayController) : aucun
 // mapping nouveau. Le flux complet :
 //   1. checkoutContext()  → étudiant + frais à payer + total (1 appel)
-//   2. operateurs()       → moyens mobile money ACTIFS de l'université
+//   2. moyensPaiement()   → opérateurs de l'université, leur numéro
+//                          d'encaissement et l'état de la configuration
 //   3. payerMobile()      → initie le paiement (statut PENDING, USSD poussé)
 //   4. statutPaiement()   → polling jusqu'à SUCCESS/FAILED
 //   5. genererBon()/telechargerBonPdf() → reçu officiel
@@ -18,6 +19,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../core/constants/api_endpoints.dart';
+import 'appel_api.dart' show deballerReponse;
 
 
 class ApiException implements Exception {
@@ -92,16 +94,75 @@ class CheckoutContext {
   });
 }
 
-/// Un opérateur mobile money actif de l'université.
+/// Un opérateur mobile money de l'université.
+///
+/// `numero` est le NUMÉRO D'ENCAISSEMENT : le compte marchand sur lequel
+/// l'argent de cet établissement arrive. Il était jeté à la lecture, alors que
+/// le serveur le renvoie et qu'il est fait pour être communiqué — c'est lui
+/// qu'un étudiant recopie pour verser depuis son téléphone.
 class OperateurMobile {
   final String code;
   final String libelle;
-  OperateurMobile({required this.code, required this.libelle});
+  final String? numero;
 
-  factory OperateurMobile.fromJson(Map<String, dynamic> j) => OperateurMobile(
-        code: (j['code'] ?? '').toString(),
-        libelle: (j['libelle'] ?? j['code'] ?? '').toString(),
-      );
+  const OperateurMobile({required this.code, required this.libelle, this.numero});
+
+  /// L'établissement a-t-il publié le compte sur lequel il encaisse ?
+  bool get aUnNumeroDEncaissement => (numero ?? '').trim().isNotEmpty;
+
+  factory OperateurMobile.fromJson(Map<String, dynamic> j) {
+    final numero = (j['numero'] ?? j['numeroCompte'] ?? '').toString().trim();
+    return OperateurMobile(
+      code: (j['code'] ?? '').toString(),
+      libelle: (j['libelle'] ?? j['code'] ?? '').toString(),
+      numero: numero.isEmpty ? null : numero,
+    );
+  }
+
+  /// Les quatre opérateurs que le serveur sait initier.
+  ///
+  /// Recopiés de `MoyensPaiementService.operateursDe` et du `switch` de
+  /// `ResolveurCompteEncaissement` : ce sont les seuls codes qu'une initiation
+  /// accepte, tout autre valant « OPERATEUR_INCONNU ». Ils servent quand
+  /// l'établissement n'a encore rien publié — l'écran reste alors parcourable
+  /// jusqu'au bout, et c'est le serveur qui prononce le refus.
+  static const List<OperateurMobile> connus = [
+    OperateurMobile(code: 'VODACOM', libelle: 'M-Pesa (Vodacom)'),
+    OperateurMobile(code: 'ORANGE', libelle: 'Orange Money'),
+    OperateurMobile(code: 'AIRTEL', libelle: 'Airtel Money'),
+    OperateurMobile(code: 'AFRIMONEY', libelle: 'AfriMoney'),
+  ];
+}
+
+/// Les moyens de paiement d'un établissement, et leur état réel.
+///
+/// ── Pourquoi cette classe existe ──────────────────────────────────────────
+///
+/// Le service ne rendait qu'une liste d'opérateurs, en jetant les deux champs
+/// qui disent si l'on peut payer : `configure` (l'établissement a-t-il
+/// enregistré ses coordonnées) et `paiementEnLigneActif` (l'initiation directe
+/// chez l'opérateur est-elle ouverte). Sans eux, l'écran ne pouvait pas
+/// distinguer « aucun opérateur » de « opérateurs connus mais encaissement pas
+/// encore ouvert », et affichait la même impasse dans les deux cas.
+class MoyensPaiement {
+  final List<OperateurMobile> operateurs;
+  final bool configure;
+  final bool paiementEnLigneActif;
+
+  const MoyensPaiement({
+    required this.operateurs,
+    required this.configure,
+    required this.paiementEnLigneActif,
+  });
+
+  const MoyensPaiement.aucun()
+      : operateurs = const [],
+        configure = false,
+        paiementEnLigneActif = false;
+
+  /// Aucun compte d'encaissement publié : le paiement sera refusé au serveur.
+  bool get sansNumeroDEncaissement =>
+      !operateurs.any((o) => o.aUnNumeroDEncaissement);
 }
 
 /// Résultat de l'initiation d'un paiement.
@@ -151,13 +212,30 @@ class TachPayService {
   final Dio dio;
   TachPayService(this.dio);
 
-  dynamic _deballer(Response res) {
+  /// Corps de la réponse, après contrôle du motif d'erreur.
+  ///
+  /// Ne déballe RIEN : le déballage est le geste de `_deballer`, et il ne
+  /// convient pas à toutes les réponses — voir `checkoutContext`.
+  dynamic _corps(Response res) {
     final body = res.data;
     if (body is Map && body['erreur'] != null) {
       throw ApiException(body['erreur'].toString(), statusCode: res.statusCode);
     }
-    return body is Map && body.containsKey('data') ? body['data'] : body;
+    return body;
   }
+
+  /// Corps utile d'une réponse enveloppée dans `ApiResponse`.
+  ///
+  /// ⚠ La règle locale était « s'il y a une clé `data`, c'est l'enveloppe » —
+  /// et elle a fait disparaître la liste des frais. Le contexte de checkout
+  /// porte en effet un MEMBRE `data` (l'identité de l'étudiant) À CÔTÉ de
+  /// `frais`, `total` et `inscriptionId` : déballer sur ce seul indice rendait
+  /// l'identité et jetait tout le reste. L'écran s'ouvrait alors sur
+  /// « Sélectionnez les frais à payer » avec RIEN à cocher, un total de 0, et
+  /// le bouton « Continuer » désactivé — le parcours mourait à son premier
+  /// écran, sans message. On s'aligne donc sur `deballerReponse`, qui exige
+  /// `success` ou une enveloppe courte (cf. `appel_api.dart`).
+  dynamic _deballer(Response res) => deballerReponse(_corps(res));
 
   Never _erreurDio(DioException e) {
     final code = e.response?.statusCode;
@@ -173,9 +251,13 @@ class TachPayService {
   Future<CheckoutContext> checkoutContext() async {
     try {
       final res = await dio.get(ApiEndpoints.tachpayCheckoutContext);
-      final data = _deballer(res) as Map<String, dynamic>;
+      // Pas de déballage ici : `data` est un membre de cette réponse, pas une
+      // enveloppe. Le lire comme telle vidait l'écran (voir `_deballer`).
+      final data = Map<String, dynamic>.from(_corps(res) as Map);
       final detail = (data['data'] as Map<String, dynamic>?) ?? data;
       final listeBrute = (data['frais'] as List?) ?? const [];
+      final fraisDus =
+          listeBrute.map((j) => FraisDu.fromJson(j as Map<String, dynamic>)).toList();
 
       return CheckoutContext(
         inscriptionId: FraisDu._entier(detail['inscriptionId']),
@@ -184,26 +266,48 @@ class TachPayService {
         telephone: detail['telephone']?.toString(),
         universiteId: (detail['universiteId'] ?? '').toString(),
         universiteNom: (detail['universiteNom'] ?? '').toString(),
-        frais: listeBrute.map((j) => FraisDu.fromJson(j as Map<String, dynamic>)).toList(),
-        total: FraisDu._reel(data['total']),
+        frais: fraisDus,
+        total: _montantDu(data, fraisDus),
       );
     } on DioException catch (e) {
       throw _erreurDio(e);
     }
   }
 
-  /// Opérateurs mobile money actifs de l'université de l'étudiant.
-  Future<List<OperateurMobile>> operateurs(String universiteId) async {
+  /// Montant réellement dû.
+  ///
+  /// ⚠ `total` du serveur est un NOMBRE DE LIGNES, pas une somme
+  /// (`getFraisAPayer` pose `total = frais.size()`). Le lire comme un montant
+  /// affichait « 3 USD » à un étudiant qui devait trois frais de plusieurs
+  /// centaines de dollars — et cela sur le bandeau « Total dû », en tête de
+  /// l'écran de paiement. On prend `montantTotal` quand le serveur l'expose, et
+  /// sinon on additionne les restes : jamais `total`.
+  static double _montantDu(Map<String, dynamic> data, List<FraisDu> frais) {
+    final montant = data['montantTotal'];
+    if (montant != null) return FraisDu._reel(montant);
+    return frais.fold<double>(0, (somme, f) => somme + f.reste);
+  }
+
+  /// Moyens de paiement de l'université de l'étudiant, et leur état réel.
+  ///
+  /// Le serveur ne liste un opérateur que si un numéro OU un code marchand lui
+  /// est connu (`MoyensPaiementService.operateursDe`). Une liste vide veut donc
+  /// dire « cet établissement n'a encore publié aucun compte d'encaissement » —
+  /// ce n'est pas une panne, et l'écran ne doit pas le présenter comme telle.
+  Future<MoyensPaiement> moyensPaiement(String universiteId) async {
     try {
       final res = await dio.get(ApiEndpoints.moyensPaiementUniversite(universiteId));
       final data = _deballer(res);
-      final ops = (data is Map ? data['operateurs'] : data) as List? ?? const [];
-      return ops
-          .whereType<Map>()
-          .map((j) => OperateurMobile.fromJson(Map<String, dynamic>.from(j)))
-          // Seuls les opérateurs avec un numéro configuré sont réellement
-          // utilisables ; le backend peut en lister davantage.
-          .toList();
+      final carte = data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{};
+      final ops = (carte['operateurs'] as List?) ?? const [];
+      return MoyensPaiement(
+        operateurs: ops
+            .whereType<Map>()
+            .map((j) => OperateurMobile.fromJson(Map<String, dynamic>.from(j)))
+            .toList(),
+        configure: carte['configure'] == true,
+        paiementEnLigneActif: carte['paiementEnLigneActif'] == true,
+      );
     } on DioException catch (e) {
       throw _erreurDio(e);
     }

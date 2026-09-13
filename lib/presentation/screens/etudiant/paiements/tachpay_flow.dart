@@ -21,7 +21,7 @@ import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/formatters.dart';
 import '../../../../data/services/tachpay_service.dart';
-import '../../../../core/di/dependencies.dart';
+import '../../../../core/utils/dio_client.dart';
 
 /// Point d'entrée du flux — pousse les 3 écrans en séquence.
 void ouvrirFluxTachPay(BuildContext context) {
@@ -38,13 +38,17 @@ class TachPayEcranFrais extends StatefulWidget {
 }
 
 class _TachPayEcranFraisState extends State<TachPayEcranFrais> {
-  // Un seul Dependencies pour toute l'app : recréer ici dupliquerait le pot à
-  // cookies et casserait la session. On récupère l'instance du contexte
-  // Provider (montée par GenucApp).
+  // `DioClient()` est un SINGLETON (`_instance ??= …`) : on récupère donc le
+  // client de l'application, avec son pot à cookies et ses intercepteurs de
+  // session. Ce qui était écrit ici — `Dependencies.creer()` — construisait en
+  // revanche un `CacheService` NEUF à chaque ouverture du flux, et celui-ci
+  // arme un `Timer.periodic` dans son constructeur que personne ne libère :
+  // un minuteur de plus à chaque visite de l'écran de paiement. Le commentaire
+  // d'origine affirmait justement qu'on ne recréait rien.
   late final TachPayService _tach;
 
   CheckoutContext? _ctx;
-  List<OperateurMobile> _operateurs = [];
+  MoyensPaiement _moyens = const MoyensPaiement.aucun();
   final Set<int> _coches = {};
   bool _chargement = true;
   String? _erreur;
@@ -52,23 +56,32 @@ class _TachPayEcranFraisState extends State<TachPayEcranFrais> {
   @override
   void initState() {
     super.initState();
-    _tach = TachPayService(Dependencies.creer().dioClient.dio);
+    _tach = TachPayService(DioClient().dio);
     _charger();
   }
 
   Future<void> _charger() async {
     try {
       final ctx = await _tach.checkoutContext();
-      final ops = ctx.universiteId.isEmpty
-          ? <OperateurMobile>[]
-          : await _tach.operateurs(ctx.universiteId);
+      // Un échec de LECTURE des moyens de paiement ne doit pas fermer le
+      // parcours : l'étudiant doit pouvoir aller jusqu'à la confirmation, où le
+      // serveur tranche. On repart donc d'un état « rien de publié » plutôt que
+      // de faire remonter l'erreur.
+      MoyensPaiement moyens = const MoyensPaiement.aucun();
+      if (ctx.universiteId.isNotEmpty) {
+        try {
+          moyens = await _tach.moyensPaiement(ctx.universiteId);
+        } on ApiException catch (e) {
+          TachPayService.debugLog('moyens de paiement illisibles : ${e.message}');
+        }
+      }
       if (!mounted) return;
       setState(() {
         _ctx = ctx;
         // Tout cocher par défaut : l'étudiant paie d'ordinaire la totalité ;
         // décocher reste possible en un tap.
         _coches.addAll(ctx.frais.map((f) => f.affectationId));
-        _operateurs = ops;
+        _moyens = moyens;
         _chargement = false;
       });
     } on ApiException catch (e) {
@@ -95,14 +108,18 @@ class _TachPayEcranFraisState extends State<TachPayEcranFrais> {
           contexte: _ctx!,
           affectationIds: _coches.toList(),
           total: _totalSelectionne,
-          operateurs: _operateurs,
+          moyens: _moyens,
         ),
       ),
     );
     if (reference != null && mounted) {
       // Paiement réussi → écran de confirmation avec bon téléchargeable.
+      // Les affectations réglées sont celles qui viennent d'être payées : on
+      // les transmet. Les redemander au serveur ne marche pas — voir
+      // `TachPayEcranConfirmation`.
       Navigator.of(context).pushReplacement(MaterialPageRoute(
-        builder: (_) => TachPayEcranConfirmation(service: _tach, reference: reference),
+        builder: (_) => TachPayEcranConfirmation(
+            service: _tach, reference: reference, affectationIds: _coches.toList()),
       ));
     }
   }
@@ -262,7 +279,7 @@ class TachPayEcranPaiement extends StatefulWidget {
   final CheckoutContext contexte;
   final List<int> affectationIds;
   final double total;
-  final List<OperateurMobile> operateurs;
+  final MoyensPaiement moyens;
 
   const TachPayEcranPaiement({
     super.key,
@@ -270,8 +287,20 @@ class TachPayEcranPaiement extends StatefulWidget {
     required this.contexte,
     required this.affectationIds,
     required this.total,
-    required this.operateurs,
+    required this.moyens,
   });
+
+  /// Ce que l'écran propose de choisir.
+  ///
+  /// Quand l'établissement n'a publié aucun compte d'encaissement, le serveur
+  /// rend une liste VIDE. L'écran affichait alors « Aucun opérateur configuré »
+  /// en rouge, sans rien à cocher : plus aucun geste n'était possible, et le
+  /// bouton « Confirmer et payer » répondait « Choisissez un opérateur » —
+  /// indéfiniment. On retombe donc sur les opérateurs que le serveur sait
+  /// initier : le parcours va jusqu'au bout, et c'est la confirmation qui
+  /// prononce le refus, avec le motif du serveur.
+  List<OperateurMobile> get operateursProposes =>
+      moyens.operateurs.isEmpty ? OperateurMobile.connus : moyens.operateurs;
 
   @override
   State<TachPayEcranPaiement> createState() => _TachPayEcranPaiementState();
@@ -285,6 +314,8 @@ class _TachPayEcranPaiementState extends State<TachPayEcranPaiement> {
   String? _operateurChoisi;
   bool _envoi = false;
   String? _erreur;
+  /// Vrai quand rien de ce que l'étudiant peut saisir ne changera la réponse.
+  bool _refusDefinitif = false;
 
   Future<void> _confirmer() async {
     final tel = _tel.text.trim();
@@ -333,9 +364,16 @@ class _TachPayEcranPaiementState extends State<TachPayEcranPaiement> {
     } on ApiException catch (e) {
       setState(() {
         _envoi = false;
+        // Le message vient du serveur et nomme la cause réelle
+        // (« Cet établissement n'a pas encore configuré ses moyens de
+        // paiement », « … n'a pas activé l'encaissement en ligne »). Il était
+        // jusqu'ici aplati en « Requête invalide » par le contrôleur, ce qui
+        // envoyait l'étudiant corriger une saisie correcte.
         _erreur = e.estModePilote
             ? 'Les paiements en ligne ne sont pas encore activés — bientôt disponible.'
             : e.message;
+        // Ce refus ne se corrige pas en retapant : il faut passer par la caisse.
+        _refusDefinitif = widget.moyens.sansNumeroDEncaissement || e.estModePilote;
       });
     } catch (e) {
       setState(() { _envoi = false; _erreur = 'Erreur inattendue : $e'; });
@@ -376,14 +414,8 @@ class _TachPayEcranPaiementState extends State<TachPayEcranPaiement> {
                   color: estSombre ? Colors.grey.shade400 : Colors.grey, fontWeight: FontWeight.w700)),
           const SizedBox(height: 8),
 
-          if (widget.operateurs.isEmpty)
-            Container(padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
-              child: const Text('Aucun opérateur configuré par votre université.',
-                  style: TextStyle(color: Colors.redAccent)),
-            )
-          else
-            ...widget.operateurs.map(_carteOperateur),
+          if (widget.moyens.sansNumeroDEncaissement) _avertissementEncaissement(estSombre),
+          ...widget.operateursProposes.map(_carteOperateur),
 
           const SizedBox(height: 20),
           Text('NUMÉRO DE TÉLÉPHONE',
@@ -414,7 +446,18 @@ class _TachPayEcranPaiementState extends State<TachPayEcranPaiement> {
           if (_erreur != null)
             Container(margin: const EdgeInsets.only(top: 16), padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(color: const Color(0xFFFDECEA), borderRadius: BorderRadius.circular(10)),
-              child: Text(_erreur!, style: const TextStyle(color: Color(0xFFB71C1C), fontSize: 13))),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(_erreur!, style: const TextStyle(color: Color(0xFFB71C1C), fontSize: 13)),
+                // Un message d'erreur qui ne dit pas quoi faire se lit comme une
+                // panne de l'application. Ici la voie de règlement existe, elle
+                // passe seulement par le guichet.
+                if (_refusDefinitif) const Padding(padding: EdgeInsets.only(top: 8),
+                  child: Text(
+                      'Rien à corriger de votre côté : votre établissement doit d’abord '
+                      'publier son compte d’encaissement. En attendant, réglez vos frais '
+                      'à la caisse — votre reçu y sera enregistré de la même manière.',
+                      style: TextStyle(color: Color(0xFF8C2F26), fontSize: 12.5, height: 1.4))),
+              ])),
 
           const SizedBox(height: 24),
           SizedBox(height: 52,
@@ -435,6 +478,32 @@ class _TachPayEcranPaiementState extends State<TachPayEcranPaiement> {
                   color: estSombre ? Colors.grey.shade400 : Colors.grey))),
         ]),
       ),
+    );
+  }
+
+  /// Dit, AVANT la saisie, que ce paiement va probablement être refusé — et
+  /// pourquoi. C'est la contrepartie du parcours laissé ouvert : on ne bloque
+  /// plus l'étudiant, mais on ne lui laisse pas croire que tout est prêt.
+  Widget _avertissementEncaissement(bool estSombre) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: estSombre ? const Color(0xFF3A2E12) : const Color(0xFFFFF6E5),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE0A100).withValues(alpha: .45)),
+      ),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Icon(Icons.info_outline_rounded, size: 19, color: Color(0xFFB26A00)),
+        const SizedBox(width: 10),
+        Expanded(child: Text(
+          'Votre établissement n’a pas encore publié son compte d’encaissement. '
+          'Vous pouvez poursuivre : la demande sera vérifiée à la confirmation.',
+          style: TextStyle(
+              fontSize: 12.5, height: 1.4,
+              color: estSombre ? const Color(0xFFF0D9A8) : const Color(0xFF7A4B00)),
+        )),
+      ]),
     );
   }
 
@@ -463,8 +532,19 @@ class _TachPayEcranPaiementState extends State<TachPayEcranPaiement> {
                   : (estSombre ? Colors.grey.shade500 : Colors.grey.shade400),
               size: 22),
           const SizedBox(width: 12),
-          Expanded(child: Text(o.libelle,
-              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5, color: textePrincipal))),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(o.libelle,
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5, color: textePrincipal)),
+            if (o.aUnNumeroDEncaissement)
+              Padding(padding: const EdgeInsets.only(top: 3),
+                child: Text('Encaissement : ${o.numero}',
+                    style: TextStyle(fontSize: 11.5,
+                        color: estSombre ? Colors.grey.shade400 : Colors.grey.shade600)))
+            else
+              Padding(padding: const EdgeInsets.only(top: 3),
+                child: Text('Compte d’encaissement non encore publié',
+                    style: TextStyle(fontSize: 11.5, color: Color(0xFFB26A00)))),
+          ])),
           Icon(Icons.chevron_right, color: estSombre ? Colors.grey.shade400 : Colors.grey),
         ]),
       ),
@@ -477,7 +557,16 @@ class _TachPayEcranPaiementState extends State<TachPayEcranPaiement> {
 class TachPayEcranConfirmation extends StatefulWidget {
   final TachPayService service;
   final String reference;
-  const TachPayEcranConfirmation({super.key, required this.service, required this.reference});
+
+  /// Les affectations que ce paiement vient de régler.
+  final List<int> affectationIds;
+
+  const TachPayEcranConfirmation({
+    super.key,
+    required this.service,
+    required this.reference,
+    required this.affectationIds,
+  });
 
   @override
   State<TachPayEcranConfirmation> createState() => _TachPayEcranConfirmationState();
@@ -500,11 +589,16 @@ class _TachPayEcranConfirmationState extends State<TachPayEcranConfirmation> {
   Future<void> _genererBon() async {
     setState(() => _generationBon = true);
     try {
-      // Les affectations réglées sont celles du paiement ; or l'endpoint
-      // attend des IDs d'affectation. Le backend accepte aussi une liste vide
-      // pour « toutes les dettes réglées par ce paiement » dans le flux web :
-      // on repasse par le contexte pour récupérer les mêmes IDs cochés.
-      final bons = await _bonsDepuisContexte();
+      // ⚠ Les IDs viennent de l'écran précédent, PAS d'une relecture du
+      // checkout. L'ancienne version rappelait `checkoutContext()` et gardait
+      // les frais dont `reste <= 0` — or ce contexte ne liste que les dettes
+      // ACTIVES (`findDettesActivesByInscription` : statut EN_ATTENTE ou
+      // PARTIEL). Un frais qui vient d'être soldé passe à PAYE et DISPARAÎT de
+      // la réponse : le filtre ne trouvait jamais rien, `genererBon([])` ne
+      // rendait aucun bon, et l'écran affichait indéfiniment « Le bon sera
+      // disponible dès la confirmation du paiement ». Le dernier geste du
+      // parcours — repartir avec son reçu — n'a donc jamais fonctionné.
+      final bons = await widget.service.genererBon(widget.affectationIds);
       if (!mounted) return;
       setState(() { _bons = bons; _generationBon = false; });
     } on ApiException catch (e) {
@@ -516,13 +610,6 @@ class _TachPayEcranConfirmationState extends State<TachPayEcranConfirmation> {
     }
   }
 
-  Future<List<BonDePaiementInfo>> _bonsDepuisContexte() async {
-    // Réutilise le checkout : les frais dont `reste` vaut 0 viennent d'être
-    // soldés par ce paiement — ce sont eux qu'on acquitte sur le bon.
-    final ctx = await widget.service.checkoutContext();
-    final soldes = ctx.frais.where((f) => f.reste <= 0).map((f) => f.affectationId).toList();
-    return widget.service.genererBon(soldes);
-  }
 
   Future<void> _telechargerPdf(BonDePaiementInfo bon) async {
     setState(() => _telechargement = true);
