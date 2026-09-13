@@ -71,6 +71,33 @@ class FraisDu {
   }
 }
 
+/// Une dette que le paiement en ligne ECARTE, et pourquoi.
+///
+/// Elles n'étaient pas transmises : l'étudiant lisait neuf frais sur son
+/// tableau de bord et trois à l'écran de paiement, sans un mot sur les six
+/// autres — un écart qui se lit comme une panne. Elles restent non payables ;
+/// elles sont seulement dites, avec le motif du serveur.
+class FraisNonPayable {
+  final int affectationId;
+  final String libelle;
+  final double reste;
+  final String motif;
+
+  FraisNonPayable({
+    required this.affectationId,
+    required this.libelle,
+    required this.reste,
+    required this.motif,
+  });
+
+  factory FraisNonPayable.fromJson(Map<String, dynamic> j) => FraisNonPayable(
+        affectationId: FraisDu._entier(j['id'] ?? j['affectationId']),
+        libelle: (j['libelle'] ?? 'Frais').toString(),
+        reste: FraisDu._reel(j['reste'] ?? j['montant']),
+        motif: (j['motif'] ?? 'Ce frais ne peut pas être réglé ici.').toString(),
+      );
+}
+
 /// Contexte de checkout : qui paie, quoi, et combien.
 class CheckoutContext {
   final int inscriptionId;
@@ -81,6 +108,7 @@ class CheckoutContext {
   final String universiteNom;
   final List<FraisDu> frais;
   final double total;
+  final List<FraisNonPayable> nonPayables;
 
   CheckoutContext({
     required this.inscriptionId,
@@ -91,6 +119,7 @@ class CheckoutContext {
     required this.universiteNom,
     required this.frais,
     required this.total,
+    this.nonPayables = const [],
   });
 }
 
@@ -268,6 +297,10 @@ class TachPayService {
         universiteNom: (detail['universiteNom'] ?? '').toString(),
         frais: fraisDus,
         total: _montantDu(data, fraisDus),
+        nonPayables: ((data['fraisNonPayables'] as List?) ?? const [])
+            .whereType<Map>()
+            .map((j) => FraisNonPayable.fromJson(Map<String, dynamic>.from(j)))
+            .toList(),
       );
     } on DioException catch (e) {
       throw _erreurDio(e);

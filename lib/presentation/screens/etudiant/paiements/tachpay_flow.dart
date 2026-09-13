@@ -207,6 +207,17 @@ class _TachPayEcranFraisState extends State<TachPayEcranFrais> {
                     style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: textePrincipal))),
               ...ctx.frais.map((f) => _carteFrais(f, fondCarte, textePrincipal, texteSecondaire, bordureCarte)),
 
+              if (ctx.frais.isEmpty)
+                Padding(padding: const EdgeInsets.symmetric(vertical: 18),
+                  child: Text('Aucun frais réglable en ligne pour le moment.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 13, color: texteSecondaire))),
+
+              // Les dettes que le serveur écarte. Elles n'étaient tout
+              // simplement pas affichées : neuf frais au tableau de bord, trois
+              // ici, et rien sur les six autres — ce qui se lit comme une panne.
+              if (ctx.nonPayables.isNotEmpty)
+                _blocNonPayables(ctx, fondCarte, textePrincipal, texteSecondaire, bordureCarte),
               ],
             ),
           ),
@@ -231,6 +242,54 @@ class _TachPayEcranFraisState extends State<TachPayEcranFrais> {
           ]),
         ),
       ),
+    );
+  }
+
+  /// Les dettes que le serveur refuse de faire régler ici, avec leur motif.
+  ///
+  /// Elles ne sont pas cochables — le paiement ET le bon de caisse leur sont
+  /// également refusés côté serveur. Les taire les rendait introuvables ; les
+  /// montrer sans dire pourquoi les ferait passer pour un défaut de l'appli.
+  Widget _blocNonPayables(CheckoutContext ctx, Color fondCarte, Color textePrincipal,
+      Color texteSecondaire, Color bordureCarte) {
+    final total = ctx.nonPayables.fold<double>(0, (s, f) => s + f.reste);
+    return Container(
+      margin: const EdgeInsets.only(top: 18),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: fondCarte,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: bordureCarte),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Icon(Icons.info_outline_rounded, size: 18, color: Color(0xFFB26A00)),
+          const SizedBox(width: 8),
+          Expanded(child: Text('${ctx.nonPayables.length} frais à régler à la caisse',
+              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5, color: textePrincipal))),
+          Text(formatMontant(total),
+              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5, color: texteSecondaire)),
+        ]),
+        const SizedBox(height: 4),
+        Text('Ces frais vous sont bien facturés, mais ne peuvent pas être payés '
+             'depuis l’application. Présentez-vous à la caisse de votre établissement.',
+            style: TextStyle(fontSize: 12, height: 1.4, color: texteSecondaire)),
+        const SizedBox(height: 10),
+        ...ctx.nonPayables.map((f) => Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Expanded(child: Text(f.libelle,
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: textePrincipal))),
+              Text(formatMontant(f.reste),
+                  style: TextStyle(fontSize: 13, color: textePrincipal)),
+            ]),
+            Padding(padding: const EdgeInsets.only(top: 2),
+              child: Text(f.motif,
+                  style: TextStyle(fontSize: 11.5, height: 1.35, color: const Color(0xFFB26A00)))),
+          ]),
+        )),
+      ]),
     );
   }
 
@@ -316,6 +375,42 @@ class _TachPayEcranPaiementState extends State<TachPayEcranPaiement> {
   String? _erreur;
   /// Vrai quand rien de ce que l'étudiant peut saisir ne changera la réponse.
   bool _refusDefinitif = false;
+  bool _bonEnCours = false;
+
+  /// Émet un bon de caisse pour les frais sélectionnés et l'affiche.
+  ///
+  /// Ne dépend NI de l'opérateur NI du numéro de téléphone : régler en espèces
+  /// au guichet ne passe par aucun opérateur. Le serveur applique le même
+  /// périmètre qu'au paiement — un frais qu'il refuse n'obtient pas de bon non
+  /// plus, et le motif s'affiche ici.
+  Future<void> _obtenirBonDeCaisse() async {
+    setState(() { _bonEnCours = true; _erreur = null; });
+    try {
+      final bons = await widget.service.genererBon(widget.affectationIds);
+      if (!mounted) return;
+      setState(() => _bonEnCours = false);
+      if (bons.isEmpty) {
+        setState(() => _erreur = 'Aucun bon n’a pu être émis pour ces frais.');
+        return;
+      }
+      Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => TachPayEcranConfirmation(
+            service: widget.service, reference: null,
+            affectationIds: widget.affectationIds),
+      ));
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _bonEnCours = false;
+        _erreur = e.estModePilote
+            ? 'L’émission de bons n’est pas encore activée — bientôt disponible.'
+            : e.message;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() { _bonEnCours = false; _erreur = 'Erreur inattendue : $e'; });
+    }
+  }
 
   Future<void> _confirmer() async {
     final tel = _tel.text.trim();
@@ -472,7 +567,34 @@ class _TachPayEcranPaiementState extends State<TachPayEcranPaiement> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13))),
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
+          // Le bon de caisse s'obtient AVANT de payer : c'est un titre de dépôt
+          // d'espèces au guichet. L'application ne l'offrait nulle part — il ne
+          // se générait qu'APRÈS un paiement mobile réussi, c'est-à-dire jamais
+          // tant que l'établissement n'encaisse pas en ligne. Le portail web,
+          // lui, l'a toujours proposé.
+          SizedBox(height: 50,
+            child: OutlinedButton.icon(
+              icon: _bonEnCours
+                  ? const SizedBox(width: 18, height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.receipt_long_rounded),
+              label: Text(_bonEnCours ? 'Émission du bon…' : 'Obtenir un bon de caisse',
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5)),
+              onPressed: (_envoi || _bonEnCours) ? null : _obtenirBonDeCaisse,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppTheme.primary,
+                side: const BorderSide(color: AppTheme.primary, width: 1.5),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13))),
+            ),
+          ),
+          Padding(padding: const EdgeInsets.only(top: 6),
+            child: Text('Un titre à présenter au guichet pour régler en espèces.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 11.5,
+                    color: estSombre ? Colors.grey.shade400 : Colors.grey.shade600))),
+
+          const SizedBox(height: 14),
           Center(child: Text('Paiement sécurisé TachPay 🔒',
               style: TextStyle(fontSize: 11.5,
                   color: estSombre ? Colors.grey.shade400 : Colors.grey))),
@@ -556,9 +678,9 @@ class _TachPayEcranPaiementState extends State<TachPayEcranPaiement> {
 
 class TachPayEcranConfirmation extends StatefulWidget {
   final TachPayService service;
-  final String reference;
+  final String? reference;
 
-  /// Les affectations que ce paiement vient de régler.
+  /// Les affectations réglées, ou à régler pour un bon de caisse.
   final List<int> affectationIds;
 
   const TachPayEcranConfirmation({
@@ -567,6 +689,14 @@ class TachPayEcranConfirmation extends StatefulWidget {
     required this.reference,
     required this.affectationIds,
   });
+
+  /// Vrai quand l'écran sert un BON DE CAISSE et non l'issue d'un paiement.
+  ///
+  /// Le bon de caisse est un instrument de dépôt d'ESPÈCES au guichet : il
+  /// s'obtient AVANT de payer, pas après. Tant que l'établissement n'encaisse
+  /// pas en ligne, c'est la seule façon de régler — et l'application ne
+  /// l'offrait nulle part, alors que le portail web, si.
+  bool get estBonDeCaisse => reference == null;
 
   @override
   State<TachPayEcranConfirmation> createState() => _TachPayEcranConfirmationState();
@@ -645,13 +775,23 @@ class _TachPayEcranConfirmationState extends State<TachPayEcranConfirmation> {
           child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
             Container(
               width: 92, height: 92,
-              decoration: const BoxDecoration(color: Color(0xFFDFF0D8), shape: BoxShape.circle),
-              child: const Icon(Icons.check_rounded, size: 56, color: Color(0xFF2E7D32)),
+              decoration: BoxDecoration(
+                  color: widget.estBonDeCaisse ? const Color(0xFFE6F1FB) : const Color(0xFFDFF0D8),
+                  shape: BoxShape.circle),
+              child: Icon(
+                  widget.estBonDeCaisse ? Icons.receipt_long_rounded : Icons.check_rounded,
+                  size: 56,
+                  color: widget.estBonDeCaisse ? const Color(0xFF185FA5) : const Color(0xFF2E7D32)),
             ),
             const SizedBox(height: 18),
-            const Text('Paiement initié', style: TextStyle(fontSize: 21, fontWeight: FontWeight.w800)),
+            Text(widget.estBonDeCaisse ? 'Votre bon de caisse' : 'Paiement initié',
+                style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w800)),
             const SizedBox(height: 6),
-            Text('Référence ${widget.reference}',
+            Text(
+                widget.estBonDeCaisse
+                    ? 'Présentez-le au guichet et réglez en espèces.'
+                    : 'Référence ${widget.reference}',
+                textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
             const SizedBox(height: 24),
 
@@ -663,7 +803,10 @@ class _TachPayEcranConfirmationState extends State<TachPayEcranConfirmation> {
                 if (_generationBon) const Padding(padding: EdgeInsets.symmetric(vertical: 10),
                     child: CircularProgressIndicator(color: AppTheme.primary))
                 else if (_bons == null || _bons!.isEmpty)
-                  Text(_message ?? 'Le bon sera disponible dès la confirmation du paiement.',
+                  Text(_message ??
+                          (widget.estBonDeCaisse
+                              ? 'Aucun bon n’a pu être émis pour ces frais.'
+                              : 'Le bon sera disponible dès la confirmation du paiement.'),
                       textAlign: TextAlign.center,
                       style: TextStyle(color: Colors.grey.shade600, fontSize: 13))
                 else

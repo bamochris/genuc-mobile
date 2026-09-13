@@ -140,6 +140,49 @@ void main() {
     });
   });
 
+  group('Frais écartés par le serveur', () {
+    test('ils sont transmis avec leur motif, au lieu de disparaître', () async {
+      final service = _service(_Faux({
+        '/api/tachpay/etudiant/checkout-context': {
+          'data': {'inscriptionId': 7},
+          'montantTotal': 300.0,
+          'frais': [
+            {'id': 1, 'libelle': 'Minerval', 'montant': 300, 'reste': 300},
+          ],
+          // Le symptôme du terrain : neuf dettes au tableau de bord, trois ici.
+          'fraisNonPayables': [
+            {'id': 8, 'libelle': 'Frais académique', 'montant': 500, 'reste': 500,
+             'motif': 'Ce frais n’a pas d’année académique : l’établissement doit la renseigner.'},
+            {'id': 9, 'libelle': 'Frais de laboratoire', 'montant': 120, 'reste': 120,
+             'motif': 'Frais de l’année 2025-2026, votre inscription est de 2026-2027.'},
+          ],
+        },
+      }));
+
+      final ctx = await service.checkoutContext();
+      expect(ctx.frais.length, 1);
+      expect(ctx.nonPayables.length, 2);
+      expect(ctx.nonPayables.first.libelle, 'Frais académique');
+      expect(ctx.nonPayables.first.reste, 500.0);
+      expect(ctx.nonPayables.first.motif, contains('année académique'));
+      // Le total à payer ne compte QUE ce qui est payable : additionner les
+      // écartés ferait promettre un règlement que le serveur refusera.
+      expect(ctx.total, 300.0);
+    });
+
+    test('absence de la clé = aucun écarté, pas une erreur', () async {
+      final service = _service(_Faux({
+        '/api/tachpay/etudiant/checkout-context': {
+          'data': {'inscriptionId': 7},
+          'montantTotal': 300.0,
+          'frais': [{'id': 1, 'libelle': 'Minerval', 'montant': 300, 'reste': 300}],
+        },
+      }));
+      final ctx = await service.checkoutContext();
+      expect(ctx.nonPayables, isEmpty);
+    });
+  });
+
   group('Bon de paiement', () {
     test('il se demande pour les affectations PAYÉES, transmises par l’écran', () async {
       final faux = _Faux({
