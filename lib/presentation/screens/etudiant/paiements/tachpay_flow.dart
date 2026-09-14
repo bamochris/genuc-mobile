@@ -358,8 +358,25 @@ class TachPayEcranPaiement extends StatefulWidget {
   /// indéfiniment. On retombe donc sur les opérateurs que le serveur sait
   /// initier : le parcours va jusqu'au bout, et c'est la confirmation qui
   /// prononce le refus, avec le motif du serveur.
-  List<OperateurMobile> get operateursProposes =>
-      moyens.operateurs.isEmpty ? OperateurMobile.connus : moyens.operateurs;
+  ///
+  /// Quand le serveur dit quels canaux sont RÉELLEMENT ouverts (`canauxEnLigne`),
+  /// seuls ceux-là sont proposés : un opérateur dont l'établissement n'a publié
+  /// qu'un numéro, ou dont les identifiants sont incomplets, menait à un refus au
+  /// moment de payer. Le repli sur les quatre connus ne vaut plus que pour un
+  /// serveur qui ne donne pas cette liste.
+  List<OperateurMobile> get operateursProposes {
+    final ouverts = moyens.canauxEnLigne;
+    if (ouverts != null) {
+      return OperateurMobile.connus
+          .where((connu) => ouverts.contains(connu.code))
+          .map((connu) => moyens.operateurs.firstWhere(
+                (publie) => publie.code == connu.code,
+                orElse: () => connu,
+              ))
+          .toList();
+    }
+    return moyens.operateurs.isEmpty ? OperateurMobile.connus : moyens.operateurs;
+  }
 
   @override
   State<TachPayEcranPaiement> createState() => _TachPayEcranPaiementState();
@@ -509,7 +526,10 @@ class _TachPayEcranPaiementState extends State<TachPayEcranPaiement> {
                   color: estSombre ? Colors.grey.shade400 : Colors.grey, fontWeight: FontWeight.w700)),
           const SizedBox(height: 8),
 
-          if (widget.moyens.sansNumeroDEncaissement) _avertissementEncaissement(estSombre),
+          if (widget.moyens.paiementEnLigneFerme)
+            _avertissementPaiementFerme(estSombre)
+          else if (widget.moyens.sansNumeroDEncaissement)
+            _avertissementEncaissement(estSombre),
           ...widget.operateursProposes.map(_carteOperateur),
 
           const SizedBox(height: 20),
@@ -621,6 +641,31 @@ class _TachPayEcranPaiementState extends State<TachPayEcranPaiement> {
         Expanded(child: Text(
           'Votre établissement n’a pas encore publié son compte d’encaissement. '
           'Vous pouvez poursuivre : la demande sera vérifiée à la confirmation.',
+          style: TextStyle(
+              fontSize: 12.5, height: 1.4,
+              color: estSombre ? const Color(0xFFF0D9A8) : const Color(0xFF7A4B00)),
+        )),
+      ]),
+    );
+  }
+
+  /// Aucun canal ouvert en ligne par l'établissement : on le dit, et on renvoie
+  /// vers le bon de caisse, plutôt que de laisser choisir un opérateur refusé.
+  Widget _avertissementPaiementFerme(bool estSombre) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: estSombre ? const Color(0xFF3A2E12) : const Color(0xFFFFF6E5),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE0A100).withValues(alpha: .45)),
+      ),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Icon(Icons.info_outline_rounded, size: 19, color: Color(0xFFB26A00)),
+        const SizedBox(width: 10),
+        Expanded(child: Text(
+          'Votre établissement n’a pas encore ouvert le paiement mobile money en ligne. '
+          'Réglez vos frais à la caisse avec un bon de caisse.',
           style: TextStyle(
               fontSize: 12.5, height: 1.4,
               color: estSombre ? const Color(0xFFF0D9A8) : const Color(0xFF7A4B00)),

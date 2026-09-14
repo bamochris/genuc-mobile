@@ -80,6 +80,9 @@ void main() {
       final moyens = await service.moyensPaiement('42');
       expect(moyens.configure, isTrue);
       expect(moyens.paiementEnLigneActif, isTrue);
+      // Champ absent de la réponse : inconnu, pas « aucun canal ».
+      expect(moyens.canauxEnLigne, isNull);
+      expect(moyens.paiementEnLigneFerme, isFalse);
       expect(moyens.operateurs.first.numero, '+243810000000');
       expect(moyens.operateurs.first.aUnNumeroDEncaissement, isTrue);
       // Un opérateur listé sans numéro n'est pas un compte d'encaissement.
@@ -116,7 +119,38 @@ void main() {
           moyens: moyens,
         );
 
-    test('aucun opérateur publié : on propose quand même les quatre connus', () {
+    test('le serveur liste les canaux ouverts : seuls ceux-là sont proposés', () async {
+      final service = _service(_Faux({
+        '/api/universites/42/moyens-paiement': {
+          'configure': true,
+          'paiementEnLigneActif': true,
+          'canauxEnLigne': ['AFRIMONEY'],
+          'operateurs': [
+            {'code': 'VODACOM', 'libelle': 'M-Pesa (Vodacom)', 'numero': '+243810000000'},
+            {'code': 'AFRIMONEY', 'libelle': 'AfriMoney', 'numero': '+243900000000'},
+          ],
+        },
+      }));
+      final ecran = ecranAvec(await service.moyensPaiement('42'));
+
+      // M-Pesa a un numéro affiché, mais pas d'encaissement en ligne complet :
+      // le proposer menait à un refus au moment de payer.
+      expect(ecran.operateursProposes.map((o) => o.code), ['AFRIMONEY']);
+      expect(ecran.operateursProposes.single.numero, '+243900000000');
+    });
+
+    test('aucun canal ouvert : aucun opérateur proposé, et l’écran le sait', () {
+      final ecran = ecranAvec(const MoyensPaiement(
+        operateurs: [OperateurMobile(code: 'VODACOM', libelle: 'M-Pesa (Vodacom)', numero: '+243810000000')],
+        configure: true,
+        paiementEnLigneActif: false,
+        canauxEnLigne: [],
+      ));
+      expect(ecran.operateursProposes, isEmpty);
+      expect(ecran.moyens.paiementEnLigneFerme, isTrue);
+    });
+
+    test('serveur sans la liste des canaux : on propose quand même les quatre connus', () {
       final ecran = ecranAvec(const MoyensPaiement.aucun());
       // Sans cela, plus rien n'était cochable et le parcours s'arrêtait là.
       expect(ecran.operateursProposes, isNotEmpty);

@@ -178,16 +178,28 @@ class MoyensPaiement {
   final bool configure;
   final bool paiementEnLigneActif;
 
+  /// Canaux réellement payables en ligne (`VODACOM`, `AFRIMONEY`…), selon le serveur.
+  ///
+  /// `null` : serveur antérieur à ce champ, ou moyens non chargés — l'écran garde
+  /// alors son comportement d'avant. Liste VIDE : l'établissement n'a ouvert aucun
+  /// canal ; proposer un opérateur quand même ne mènerait qu'à un refus au paiement.
+  final List<String>? canauxEnLigne;
+
   const MoyensPaiement({
     required this.operateurs,
     required this.configure,
     required this.paiementEnLigneActif,
+    this.canauxEnLigne,
   });
 
   const MoyensPaiement.aucun()
       : operateurs = const [],
         configure = false,
-        paiementEnLigneActif = false;
+        paiementEnLigneActif = false,
+        canauxEnLigne = null;
+
+  /// Le serveur dit explicitement qu'aucun canal n'est ouvert en ligne.
+  bool get paiementEnLigneFerme => canauxEnLigne != null && canauxEnLigne!.isEmpty;
 
   /// Aucun compte d'encaissement publié : le paiement sera refusé au serveur.
   bool get sansNumeroDEncaissement =>
@@ -340,6 +352,9 @@ class TachPayService {
             .toList(),
         configure: carte['configure'] == true,
         paiementEnLigneActif: carte['paiementEnLigneActif'] == true,
+        canauxEnLigne: carte['canauxEnLigne'] is List
+            ? (carte['canauxEnLigne'] as List).map((c) => c.toString()).toList()
+            : null,
       );
     } on DioException catch (e) {
       throw _erreurDio(e);
