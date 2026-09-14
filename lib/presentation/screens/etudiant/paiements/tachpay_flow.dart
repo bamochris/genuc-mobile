@@ -349,33 +349,31 @@ class TachPayEcranPaiement extends StatefulWidget {
     required this.moyens,
   });
 
-  /// Ce que l'écran propose de choisir.
+  /// Ce que l'écran propose de choisir : TOUJOURS les quatre opérateurs.
   ///
-  /// Quand l'établissement n'a publié aucun compte d'encaissement, le serveur
-  /// rend une liste VIDE. L'écran affichait alors « Aucun opérateur configuré »
-  /// en rouge, sans rien à cocher : plus aucun geste n'était possible, et le
-  /// bouton « Confirmer et payer » répondait « Choisissez un opérateur » —
-  /// indéfiniment. On retombe donc sur les opérateurs que le serveur sait
-  /// initier : le parcours va jusqu'au bout, et c'est la confirmation qui
-  /// prononce le refus, avec le motif du serveur.
+  /// TachPay présente les mêmes modes de paiement dans toutes les universités ;
+  /// seules les coordonnées et la mise en service diffèrent. Un opérateur que
+  /// l'établissement n'a pas encore ouvert reste donc affiché, marqué « pas
+  /// encore activé », et c'est la confirmation qui le refuse. Le masquer (ce que
+  /// faisait la version du 14/09 au matin) retirait de l'écran le choix du mode
+  /// de paiement lui-même tant qu'aucun contrat n'était en service.
   ///
-  /// Quand le serveur dit quels canaux sont RÉELLEMENT ouverts (`canauxEnLigne`),
-  /// seuls ceux-là sont proposés : un opérateur dont l'établissement n'a publié
-  /// qu'un numéro, ou dont les identifiants sont incomplets, menait à un refus au
-  /// moment de payer. Le repli sur les quatre connus ne vaut plus que pour un
-  /// serveur qui ne donne pas cette liste.
-  List<OperateurMobile> get operateursProposes {
+  /// Le numéro d'encaissement publié par l'établissement est repris quand il
+  /// existe : c'est lui qu'on recopie pour verser.
+  List<OperateurMobile> get operateursProposes => OperateurMobile.connus
+      .map((connu) => moyens.operateurs.firstWhere(
+            (publie) => publie.code == connu.code,
+            orElse: () => connu,
+          ))
+      .toList();
+
+  /// L'établissement a-t-il mis ce canal en service ?
+  ///
+  /// Serveur qui ne donne pas la liste (`canauxEnLigne == null`) : on ne sait
+  /// pas, et c'est le serveur qui tranchera à la confirmation.
+  bool estOuvert(String code) {
     final ouverts = moyens.canauxEnLigne;
-    if (ouverts != null) {
-      return OperateurMobile.connus
-          .where((connu) => ouverts.contains(connu.code))
-          .map((connu) => moyens.operateurs.firstWhere(
-                (publie) => publie.code == connu.code,
-                orElse: () => connu,
-              ))
-          .toList();
-    }
-    return moyens.operateurs.isEmpty ? OperateurMobile.connus : moyens.operateurs;
+    return ouverts == null || ouverts.contains(code);
   }
 
   @override
@@ -410,10 +408,13 @@ class _TachPayEcranPaiementState extends State<TachPayEcranPaiement> {
         setState(() => _erreur = 'Aucun bon n’a pu être émis pour ces frais.');
         return;
       }
+      // Les bons qui viennent d'être émis sont TRANSMIS. L'écran de
+      // confirmation les redemandait à son ouverture : chaque tap tirait deux
+      // bons, et le quota de trois était épuisé au deuxième essai.
       Navigator.of(context).push(MaterialPageRoute(
         builder: (_) => TachPayEcranConfirmation(
             service: widget.service, reference: null,
-            affectationIds: widget.affectationIds),
+            affectationIds: widget.affectationIds, bons: bons),
       ));
     } on ApiException catch (e) {
       if (!mounted) return;
@@ -432,6 +433,19 @@ class _TachPayEcranPaiementState extends State<TachPayEcranPaiement> {
   Future<void> _confirmer() async {
     final tel = _tel.text.trim();
     if (_operateurChoisi == null) { setState(() => _erreur = 'Choisissez un opérateur'); return; }
+    // Le refus se prononce ICI, à la confirmation : l'opérateur reste visible et
+    // choisissable tant que l'établissement ne l'a pas mis en service.
+    if (!widget.estOuvert(_operateurChoisi!)) {
+      final libelle = widget.operateursProposes
+          .firstWhere((o) => o.code == _operateurChoisi,
+              orElse: () => OperateurMobile(code: _operateurChoisi!, libelle: _operateurChoisi!))
+          .libelle;
+      setState(() {
+        _erreur = '$libelle n’est pas encore activé par votre établissement.';
+        _refusDefinitif = true;
+      });
+      return;
+    }
     if (tel.length < 9) { setState(() => _erreur = 'Numéro de téléphone invalide'); return; }
 
     setState(() { _envoi = true; _erreur = null; });
@@ -568,9 +582,10 @@ class _TachPayEcranPaiementState extends State<TachPayEcranPaiement> {
                 // passe seulement par le guichet.
                 if (_refusDefinitif) const Padding(padding: EdgeInsets.only(top: 8),
                   child: Text(
-                      'Rien à corriger de votre côté : votre établissement doit d’abord '
-                      'publier son compte d’encaissement. En attendant, réglez vos frais '
-                      'à la caisse — votre reçu y sera enregistré de la même manière.',
+                      'Rien à corriger de votre côté : ce moyen de paiement s’ouvrira dès sa '
+                      'mise en service par votre établissement. En attendant, obtenez un bon '
+                      'de caisse ci-dessous et réglez au guichet — votre reçu y sera '
+                      'enregistré de la même manière.',
                       style: TextStyle(color: Color(0xFF8C2F26), fontSize: 12.5, height: 1.4))),
               ])),
 
@@ -664,8 +679,9 @@ class _TachPayEcranPaiementState extends State<TachPayEcranPaiement> {
         const Icon(Icons.info_outline_rounded, size: 19, color: Color(0xFFB26A00)),
         const SizedBox(width: 10),
         Expanded(child: Text(
-          'Votre établissement n’a pas encore ouvert le paiement mobile money en ligne. '
-          'Réglez vos frais à la caisse avec un bon de caisse.',
+          'Votre établissement n’a pas encore mis en service le paiement mobile money : '
+          'les opérateurs s’ouvriront dès l’activation de ses contrats. En attendant, '
+          'obtenez un bon de caisse et réglez au guichet.',
           style: TextStyle(
               fontSize: 12.5, height: 1.4,
               color: estSombre ? const Color(0xFFF0D9A8) : const Color(0xFF7A4B00)),
@@ -702,7 +718,11 @@ class _TachPayEcranPaiementState extends State<TachPayEcranPaiement> {
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(o.libelle,
                 style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5, color: textePrincipal)),
-            if (o.aUnNumeroDEncaissement)
+            if (!widget.estOuvert(o.code))
+              const Padding(padding: EdgeInsets.only(top: 3),
+                child: Text('Pas encore activé par votre établissement',
+                    style: TextStyle(fontSize: 11.5, color: Color(0xFFB26A00))))
+            else if (o.aUnNumeroDEncaissement)
               Padding(padding: const EdgeInsets.only(top: 3),
                 child: Text('Encaissement : ${o.numero}',
                     style: TextStyle(fontSize: 11.5,
@@ -728,11 +748,16 @@ class TachPayEcranConfirmation extends StatefulWidget {
   /// Les affectations réglées, ou à régler pour un bon de caisse.
   final List<int> affectationIds;
 
+  /// Bons déjà émis par l'écran précédent. Fournis, ils sont affichés tels
+  /// quels : les redemander au serveur en tirait un second jeu à chaque tap.
+  final List<BonDePaiementInfo>? bons;
+
   const TachPayEcranConfirmation({
     super.key,
     required this.service,
     required this.reference,
     required this.affectationIds,
+    this.bons,
   });
 
   /// Vrai quand l'écran sert un BON DE CAISSE et non l'issue d'un paiement.
@@ -756,9 +781,13 @@ class _TachPayEcranConfirmationState extends State<TachPayEcranConfirmation> {
   @override
   void initState() {
     super.initState();
-    // Le bon se génère dès l'arrivée sur cet écran : l'étudiant n'a rien à
-    // demander, il n'a qu'à le télécharger.
-    _genererBon();
+    // Bons déjà émis (bon de caisse) : on les montre, sans rien redemander.
+    // Sinon (après un paiement), le bon se génère dès l'arrivée sur cet écran.
+    if (widget.bons != null) {
+      _bons = widget.bons;
+    } else {
+      _genererBon();
+    }
   }
 
   Future<void> _genererBon() async {

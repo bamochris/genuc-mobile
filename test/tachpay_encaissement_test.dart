@@ -20,6 +20,7 @@
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:genuc_mobile/data/services/tachpay_service.dart';
 import 'package:genuc_mobile/presentation/screens/etudiant/paiements/tachpay_flow.dart';
@@ -119,7 +120,7 @@ void main() {
           moyens: moyens,
         );
 
-    test('le serveur liste les canaux ouverts : seuls ceux-là sont proposés', () async {
+    test('les quatre opérateurs restent proposés ; seuls les canaux en service sont ouverts', () async {
       final service = _service(_Faux({
         '/api/universites/42/moyens-paiement': {
           'configure': true,
@@ -133,21 +134,58 @@ void main() {
       }));
       final ecran = ecranAvec(await service.moyensPaiement('42'));
 
-      // M-Pesa a un numéro affiché, mais pas d'encaissement en ligne complet :
-      // le proposer menait à un refus au moment de payer.
-      expect(ecran.operateursProposes.map((o) => o.code), ['AFRIMONEY']);
-      expect(ecran.operateursProposes.single.numero, '+243900000000');
+      // Mêmes modes dans toutes les universités : masquer un opérateur retirait
+      // le choix du mode de paiement de l'écran.
+      expect(ecran.operateursProposes.map((o) => o.code),
+          ['VODACOM', 'ORANGE', 'AIRTEL', 'AFRIMONEY']);
+      expect(ecran.estOuvert('AFRIMONEY'), isTrue);
+      // M-Pesa a un numéro publié, mais pas d'encaissement en ligne complet.
+      expect(ecran.estOuvert('VODACOM'), isFalse);
+      expect(ecran.operateursProposes.last.numero, '+243900000000');
     });
 
-    test('aucun canal ouvert : aucun opérateur proposé, et l’écran le sait', () {
+    test('aucun canal ouvert : le choix reste affiché, aucun n’est ouvert, et l’écran le sait', () {
       final ecran = ecranAvec(const MoyensPaiement(
         operateurs: [OperateurMobile(code: 'VODACOM', libelle: 'M-Pesa (Vodacom)', numero: '+243810000000')],
         configure: true,
         paiementEnLigneActif: false,
         canauxEnLigne: [],
       ));
-      expect(ecran.operateursProposes, isEmpty);
+      expect(ecran.operateursProposes, hasLength(4));
+      expect(ecran.operateursProposes.any((o) => ecran.estOuvert(o.code)), isFalse);
       expect(ecran.moyens.paiementEnLigneFerme, isTrue);
+    });
+
+    testWidgets('confirmer un opérateur pas encore activé refuse ICI, sans appeler le serveur',
+        (tester) async {
+      final faux = _Faux(const {});
+      await tester.pumpWidget(MaterialApp(
+        home: TachPayEcranPaiement(
+          service: _service(faux),
+          contexte: CheckoutContext(
+            inscriptionId: 7, matricule: 'HEC001', nomComplet: 'Jean Kabeya',
+            telephone: '0990000000',
+            universiteId: '42', universiteNom: 'HEC', frais: const [], total: 850,
+          ),
+          affectationIds: const [1, 2],
+          total: 850,
+          moyens: const MoyensPaiement(
+            operateurs: [], configure: true, paiementEnLigneActif: false, canauxEnLigne: []),
+        ),
+      ));
+
+      expect(find.text('Orange Money'), findsOneWidget);
+      await tester.tap(find.text('Orange Money'));
+      await tester.pump();
+      final confirmer = find.text('Confirmer et payer');
+      await tester.ensureVisible(confirmer);
+      await tester.tap(confirmer);
+      await tester.pump();
+
+      expect(find.textContaining('n’est pas encore activé par votre établissement.'), findsOneWidget);
+      // Le refus renvoie vers le bouton du bon de caisse, juste en dessous.
+      expect(find.textContaining('obtenez un bon de caisse ci-dessous'), findsOneWidget);
+      expect(faux.appels['/api/tachpay/etudiant/payer-mobile'] ?? 0, 0);
     });
 
     test('serveur sans la liste des canaux : on propose quand même les quatre connus', () {
@@ -163,14 +201,14 @@ void main() {
       }
     });
 
-    test('opérateurs publiés : ce sont eux qui sont proposés, pas le repli', () {
+    test('opérateur publié : son numéro d’encaissement est repris dans la liste complète', () {
       final ecran = ecranAvec(const MoyensPaiement(
         operateurs: [OperateurMobile(code: 'ORANGE', libelle: 'Orange Money', numero: '+243890000000')],
         configure: true,
         paiementEnLigneActif: true,
       ));
-      expect(ecran.operateursProposes.length, 1);
-      expect(ecran.operateursProposes.single.numero, '+243890000000');
+      expect(ecran.operateursProposes.length, 4);
+      expect(ecran.operateursProposes.firstWhere((o) => o.code == 'ORANGE').numero, '+243890000000');
     });
   });
 
@@ -233,6 +271,25 @@ void main() {
       expect(faux.dernierCorps, [11, 12]);
       expect(bons.single.numero, 'BON-2026-001');
     });
+
+    testWidgets('le bon de caisse déjà émis est affiché sans en tirer un second', (tester) async {
+      // Constaté en production : l'écran de confirmation redemandait le bon à son
+      // ouverture. Chaque tap tirait deux bons, et le serveur refusait tout
+      // nouveau bon au deuxième essai (quota de trois).
+      final faux = _Faux(const {});
+      await tester.pumpWidget(MaterialApp(
+        home: TachPayEcranConfirmation(
+          service: _service(faux),
+          reference: null,
+          affectationIds: const [11],
+          bons: [BonDePaiementInfo(numero: 'UK-BC-2026-000148', montant: 850, dateGeneration: '2026-09-14')],
+        ),
+      ));
+      await tester.pump();
+
+      expect(find.text('Bon UK-BC-2026-000148'), findsOneWidget);
+      expect(faux.appels['/api/tachpay/etudiant/bon-paiement'] ?? 0, 0);
+    });
   });
 }
 
@@ -250,6 +307,9 @@ class _Faux implements HttpClientAdapter {
   final Map<String, Object> reponses;
   dynamic dernierCorps;
 
+  /// Nombre d'appels reçus par chemin.
+  final Map<String, int> appels = {};
+
   _Faux(this.reponses);
 
   @override
@@ -261,6 +321,7 @@ class _Faux implements HttpClientAdapter {
     Stream<List<int>>? requestStream,
     Future<void>? cancelFuture,
   ) async {
+    appels.update(options.uri.path, (n) => n + 1, ifAbsent: () => 1);
     dernierCorps =
         options.data is String ? jsonDecode(options.data as String) : options.data;
     final corps = reponses[options.uri.path];
