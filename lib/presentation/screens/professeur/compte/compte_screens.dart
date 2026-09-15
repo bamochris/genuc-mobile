@@ -112,7 +112,7 @@ class MesContratsScreen extends StatelessWidget {
               libelle: 'Rémunération',
               valeur: formatMontant(
                 f.decimal('salaireBrut', alias: const ['salaire']),
-                f.texte('devise', defaut: 'USD'),
+                f.texte('devise'),
               ),
             ),
           if (f.texte('departement').isNotEmpty)

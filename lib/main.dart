@@ -21,6 +21,7 @@ import 'data/services/professeur_pedagogie_service.dart';
 import 'data/services/professeur_service.dart';
 import 'presentation/providers/annees_academiques_provider.dart';
 import 'presentation/providers/auth_provider.dart';
+import 'presentation/providers/devise_provider.dart';
 import 'presentation/providers/notification_provider.dart';
 import 'presentation/providers/professeur_provider.dart';
 import 'presentation/providers/student_provider.dart';
@@ -134,6 +135,16 @@ class GenucApp extends StatelessWidget {
         // des notes sous un exercice que personne n'avait ouvert.
         ChangeNotifierProvider<AnneesAcademiquesProvider>(
           create: (_) => AnneesAcademiquesProvider(dependencies.communService),
+        ),
+        // La devise de facturation de l'établissement. Branchée sur la session
+        // par un proxy plutôt que sur `onSessionOuverte` : ce rappel ne porte
+        // pas le profil, et il faut AUSSI réagir à une déconnexion et à un
+        // changement de compte — sinon le poste garde la devise du précédent.
+        ChangeNotifierProxyProvider<AuthProvider, DeviseProvider>(
+          create: (_) => DeviseProvider(dependencies.communService),
+          update: (_, auth, devise) =>
+              (devise ?? DeviseProvider(dependencies.communService))
+                ..suivreSession(auth.user?.universiteId),
         ),
         Provider<PresenceContexteService>(
           create: (_) => dependencies.presenceContexte,

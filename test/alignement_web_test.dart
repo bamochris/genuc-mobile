@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:genuc_mobile/data/models/etudiant/cours.dart';
+import 'package:genuc_mobile/data/models/etudiant/paiement.dart';
 import 'package:genuc_mobile/data/services/appel_api.dart';
 import 'package:genuc_mobile/presentation/screens/etudiant/demarches/demarches_screens.dart';
 
@@ -271,6 +272,107 @@ void main() {
       // appartient à un département, un niveau traverse toutes les filières.
       final cours = Cours.fromJson(coursServi);
       expect(cours.filiere, isNull);
+    });
+  });
+
+  group('Paiements — la charge utile que lit « Mes paiements »', () {
+    // `FraisEtudiantService` sert les MÊMES lignes sous deux formes, et
+    // l'écran lisait la plus pauvre des deux. Les deux se déballent sans
+    // erreur : c'est pourquoi rien ne se voyait.
+
+    /// Une ligne de `GET /api/etudiant/frais/a-payer` — la liste que le
+    /// tableau « Frais à payer » du portail web affiche.
+    const ligneAPayer = {
+      'id': 51,
+      'fraisId': 9,
+      'code': 'FRAIS-ACAD',
+      'libelle': 'Frais académiques',
+      'montant': 420,
+      'reste': 120,
+      'paye': 300,
+      'statut': 'PARTIEL',
+      'dateEcheance': '2026-10-31',
+      'estEnRetard': false,
+      'type': 'FRAIS_ACADEMIQUES',
+    };
+
+    /// La MÊME dette vue par `dettes` de `GET /api/etudiant/frais/situation` :
+    /// ni `paye`, ni `type`, ni `fraisId`, et le code/libellé sous un autre nom.
+    const memeDetteDansSituation = {
+      'id': 51,
+      'fraisCode': 'FRAIS-ACAD',
+      'fraisLibelle': 'Frais académiques',
+      'montant': 420,
+      'reste': 120,
+      'statut': 'PARTIEL',
+      'dateEcheance': '2026-10-31',
+      'estEnRetard': false,
+    };
+
+    test('/a-payer rend la part déjà versée, `situation` la perd', () {
+      // La carte affiche « Payé : X / Y » et un pourcentage. Servie par
+      // `situation.dettes`, elle annonçait « Payé : 0 / 420 — 0 % » à un
+      // étudiant qui a déjà versé 300 : le montant manquant vaut zéro, et
+      // zéro est un chiffre que l'étudiant lit comme un fait.
+      expect(FraisAcademique.fromJson(ligneAPayer).montantPaye, 300);
+      expect(FraisAcademique.fromJson(ligneAPayer).pourcentagePaye.round(), 71);
+
+      expect(FraisAcademique.fromJson(memeDetteDansSituation).montantPaye, 0);
+      expect(FraisAcademique.fromJson(memeDetteDansSituation).pourcentagePaye, 0);
+    });
+
+    test('le type du frais n\'existe que sur /a-payer', () {
+      expect(FraisAcademique.fromJson(ligneAPayer).type, 'FRAIS_ACADEMIQUES');
+      expect(FraisAcademique.fromJson(memeDetteDansSituation).type, isNull);
+    });
+
+    /// Une ligne de `GET /api/etudiant/frais/historique` — l'historique que
+    /// le portail web affiche, avec son filtre par statut.
+    const ligneHistorique = {
+      'id': 77,
+      'reference': 'GEN-2026-00042',
+      'montant': 300,
+      'devise': 'CDF',
+      'datePaiement': '2026-09-02',
+      'dateValidation': '2026-09-02',
+      'modePaiement': 'ESPECES',
+      'type': 'FRAIS_ACADEMIQUES',
+      'statut': 'VALIDE',
+      'operateur': null,
+      'numeroTransaction': null,
+    };
+
+    /// Le MÊME paiement vu par `paiements` de `/situation` : sans statut,
+    /// sans devise, sans opérateur.
+    const memePaiementDansSituation = {
+      'id': 77,
+      'reference': 'GEN-2026-00042',
+      'montant': 300,
+      'datePaiement': '2026-09-02',
+      'modePaiement': 'ESPECES',
+      'type': 'FRAIS_ACADEMIQUES',
+    };
+
+    test('un paiement validé ne s\'affiche plus « En attente »', () {
+      // `statut` absent retombe sur « EN_ATTENTE » : servi par
+      // `situation.paiements`, TOUT l'historique portait cette pastille,
+      // alors que `situation` ne liste QUE les paiements validés.
+      expect(Paiement.fromJson(ligneHistorique).estValide, isTrue);
+      expect(Paiement.fromJson(ligneHistorique).libelleStatut, 'Validé');
+
+      expect(Paiement.fromJson(memePaiementDansSituation).estValide, isFalse);
+      expect(Paiement.fromJson(memePaiementDansSituation).libelleStatut,
+          'En attente');
+    });
+
+    test('la devise du paiement est celle du serveur, pas « USD »', () {
+      // L'établissement qui facture en francs congolais voyait ses montants
+      // étiquetés en dollars.
+      expect(Paiement.fromJson(ligneHistorique).devise, 'CDF');
+      // Absente de la charge utile : on ne la SUPPOSE pas. Le champ reste
+      // vide et c'est `formatMontant` qui retombe sur la devise de
+      // l'établissement — cf. `devise_etablissement_test.dart`.
+      expect(Paiement.fromJson(memePaiementDansSituation).devise, isEmpty);
     });
   });
 }

@@ -526,7 +526,7 @@ class _JobsUniversitairesScreenState extends State<JobsUniversitairesScreen>
                             ? ''
                             : formatMontant(
                                 f.decimal('salaireNet'),
-                                f.texte('devise', defaut: 'USD'),
+                                f.texte('devise'),
                               ),
                       ),
                     ],
@@ -579,7 +579,7 @@ class _JobsUniversitairesScreenState extends State<JobsUniversitairesScreen>
                             ? ''
                             : formatMontant(
                                 f.decimal('salaireNet'),
-                                f.texte('devise', defaut: 'USD'),
+                                f.texte('devise'),
                               ),
                       ),
                     ],

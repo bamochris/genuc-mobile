@@ -601,8 +601,9 @@ class ApiEndpoints {
   static String vacationsInscriptionsEtudiant(String etudiantId) =>
       '/api/vacations/etudiant/$etudiantId/inscriptions';
 
-  /// Configuration publique de l'université, dont `modulesActifs` : le portail
-  /// web y lit quels modules masquer dans le menu.
+  /// Configuration publique de l'université, dont `modulesActifs` (le portail
+  /// web y lit quels modules masquer dans le menu) et `devise` — la devise de
+  /// facturation de l'établissement, que le mobile écrivait en dur.
   static String universitePublique(String universiteId) =>
       '/api/universites/public/$universiteId';
 

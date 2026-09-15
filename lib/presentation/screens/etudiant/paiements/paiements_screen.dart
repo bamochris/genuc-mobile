@@ -5,6 +5,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/formatters.dart';
 import '../../../../data/models/etudiant/paiement.dart';
 import 'tachpay_flow.dart';
+import '../../../providers/devise_provider.dart';
 import '../../../providers/student_provider.dart';
 import '../../../widgets/etat_widgets.dart';
 import '../../../widgets/portail_widgets.dart';
@@ -38,6 +39,12 @@ class _PaiementsScreenState extends State<PaiementsScreen> {
   @override
   Widget build(BuildContext context) {
     final studentProvider = context.watch<StudentProvider>();
+    // Aucune ligne de cet écran ne porte de devise : `formatMontant` prend
+    // celle de l'établissement, que `DeviseProvider` lit au serveur. On
+    // s'abonne ici — et non tuile par tuile — pour que l'écran se redessine
+    // quand la réponse arrive : sans cela, un écran ouvert avant elle
+    // resterait sur le repli « USD ».
+    context.watch<DeviseProvider>();
 
     return PagePortail(
       titre: 'Mes paiements',
@@ -47,6 +54,21 @@ class _PaiementsScreenState extends State<PaiementsScreen> {
               ? EtatErreur(message: studentProvider.error!, onRetry: _charger)
               : _Contenu(
                   situation: studentProvider.situationFinanciere,
+                  // La liste vient de `/a-payer`, comme le tableau « Frais à
+                  // payer » du portail web — et non de `situation.dettes`.
+                  // Les deux portent les mêmes lignes, mais `situation.dettes`
+                  // ne renvoie PAS `paye` : la carte affichait alors
+                  // « Payé : 0 / 420 — 0 % » à un étudiant qui a déjà versé
+                  // 300. `/a-payer` porte `paye` et `type`, et il était déjà
+                  // appelé par `loadSituationFinanciere` puis jeté.
+                  dettes: studentProvider.fraisAPayer,
+                  // Idem pour l'historique : `/historique` porte `statut`,
+                  // `devise` et l'opérateur, et liste TOUS les paiements
+                  // comme le tableau du web. `situation.paiements` n'a ni
+                  // statut ni devise (donc « En attente » et « USD » par
+                  // défaut sur chaque ligne) et tait les paiements en
+                  // attente, rejetés ou remboursés.
+                  paiements: studentProvider.historiquePaiements,
                   onglet: _onglet,
                   onChangerOnglet: (i) => setState(() => _onglet = i),
                   onRetry: _charger,
@@ -57,12 +79,16 @@ class _PaiementsScreenState extends State<PaiementsScreen> {
 
 class _Contenu extends StatelessWidget {
   final SituationFinanciere? situation;
+  final List<FraisAcademique> dettes;
+  final List<Paiement> paiements;
   final int onglet;
   final ValueChanged<int> onChangerOnglet;
   final Future<void> Function() onRetry;
 
   const _Contenu({
     required this.situation,
+    required this.dettes,
+    required this.paiements,
     required this.onglet,
     required this.onChangerOnglet,
     required this.onRetry,
@@ -70,8 +96,6 @@ class _Contenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dettes = situation?.dettes ?? [];
-
     return RefreshIndicator(
       onRefresh: onRetry,
       child: ListView(
@@ -96,7 +120,7 @@ class _Contenu extends StatelessWidget {
           if (onglet == 0)
             _FraisAPayer(dettes: dettes)
           else
-            _Historique(paiements: situation?.paiements ?? const []),
+            _Historique(paiements: paiements),
         ],
       ),
     );

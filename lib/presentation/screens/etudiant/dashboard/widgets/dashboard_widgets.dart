@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../../../../core/theme/app_theme.dart';
+import '../../../../../core/utils/formatters.dart';
 import '../../../../../data/models/etudiant/dashboard_data_backend.dart';
 import '../../../../../data/models/etudiant/paiement.dart';
+import '../../../../providers/devise_provider.dart';
 import '../../../../widgets/portail_widgets.dart';
 
 /// Carte de bienvenue avec informations étudiant
@@ -229,7 +232,10 @@ class StatsCard extends StatelessWidget {
                   context,
                   Icons.account_balance_wallet_rounded,
                   'Solde',
-                  '${dashboardData.soldeAPayer.toStringAsFixed(0)} USD',
+                  // Le solde du tableau de bord ne porte pas de devise :
+                  // c'est celle de l'établissement, lue au serveur.
+                  formatMontant(dashboardData.soldeAPayer,
+                      context.watch<DeviseProvider>().devise),
                   dashboardData.hasDebts ? AppTheme.error : AppTheme.success,
                 ),
               ),
@@ -290,14 +296,14 @@ class SituationFinanciereCard extends StatelessWidget {
     required this.situation,
   });
 
-  // Le backend ne renvoie pas la devise dans la situation : le portail web
-  // la résout via `useDevise()`. On garde USD par défaut, comme l'écran
-  // précédent le faisait pour le solde.
-  String _montant(double valeur) =>
-      '${valeur.toStringAsFixed(0)} USD'.trim();
-
+  // La situation financière ne porte pas de devise : c'est celle de
+  // l'établissement, que `DeviseProvider` lit au serveur — comme le portail
+  // web le fait par `useDevise()`. « USD » était écrit ici en dur.
   @override
   Widget build(BuildContext context) {
+    final devise = context.watch<DeviseProvider>().devise;
+    String montant(double valeur) => formatMontant(valeur, devise);
+
     final couleurReste = situation.totalReste > 0
         ? AppTheme.errorText
         : AppTheme.success;
@@ -332,14 +338,14 @@ class SituationFinanciereCard extends StatelessWidget {
                     _LigneMontant(
                       icon: Icons.receipt_long_rounded,
                       libelle: 'Total attendu',
-                      valeur: _montant(situation.totalAttendu),
+                      valeur: montant(situation.totalAttendu),
                       couleur: AppTheme.textPrimaryOf(context),
                     ),
                     const SizedBox(height: 10),
                     _LigneMontant(
                       icon: Icons.check_circle_rounded,
                       libelle: 'Déjà payé',
-                      valeur: _montant(situation.totalPaye),
+                      valeur: montant(situation.totalPaye),
                       couleur: AppTheme.success,
                     ),
                     const SizedBox(height: 10),
@@ -350,7 +356,7 @@ class SituationFinanciereCard extends StatelessWidget {
                       libelle: situation.totalReste > 0
                           ? 'Reste à payer'
                           : 'Soldé ✓',
-                      valeur: _montant(situation.totalReste),
+                      valeur: montant(situation.totalReste),
                       couleur: couleurReste,
                     ),
                   ],
@@ -784,7 +790,7 @@ class DettesCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  'Solde: ${dashboardData.soldeAPayer.toStringAsFixed(0)} USD',
+                  'Solde: ${formatMontant(dashboardData.soldeAPayer, context.watch<DeviseProvider>().devise)}',
                   style: TextStyle(
                     color: AppTheme.error,
                     fontSize: 12,

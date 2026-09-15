@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/utils/formatters.dart';
 import '../../../../data/services/professeur_pedagogie_service.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../widgets/formulaire_dynamique.dart';
@@ -127,9 +128,11 @@ class ProjetsRechercheScreen extends StatelessWidget {
           LigneDetail(libelle: 'Financement', valeur: f.texte('financement')),
           LigneDetail(
             libelle: 'Montant',
+            // La devise du financement si la fiche la porte, sinon celle de
+            // l'établissement : « USD » était écrit en dur.
             valeur: f.decimalOuNul('montant') == null
                 ? ''
-                : '${f.decimal('montant').toStringAsFixed(0)} USD',
+                : formatMontant(f.decimal('montant'), f.texte('devise')),
           ),
           LigneDetail(
             libelle: 'Période',

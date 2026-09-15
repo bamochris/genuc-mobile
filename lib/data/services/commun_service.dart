@@ -130,6 +130,19 @@ class CommunService extends ServiceApi {
     return carte.map((cle, valeur) => MapEntry(cle, valeur != false));
   }
 
+  /// Devise de facturation de l'établissement, telle qu'il l'a déclarée.
+  ///
+  /// Rend une chaîne vide si le champ n'est pas renseigné : c'est au appelant
+  /// de décider du repli, et « non renseignée » ne doit pas se confondre avec
+  /// une devise choisie.
+  Future<String> deviseEtablissement(String universiteId) async {
+    final fiche = await ficheDe(
+      ApiEndpoints.universitePublique(universiteId),
+      contexte: 'La devise de l\'établissement n\'a pas pu être lue.',
+    );
+    return fiche.texte('devise');
+  }
+
   // ─── Référentiel ───────────────────────────────────────────
 
   Future<List<Fiche>> universites() => listeDe(ApiEndpoints.universites);

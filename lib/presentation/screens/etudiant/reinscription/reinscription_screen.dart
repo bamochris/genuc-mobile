@@ -282,7 +282,7 @@ class _ReinscriptionScreenState extends State<ReinscriptionScreen> {
                                   [
                                     v.texte('nom'),
                                     if (v.decimalOuNul('fraisInscription') != null)
-                                      '(${formatMontant(v.decimal('fraisInscription'), v.texte('deviseFrais', defaut: 'USD'))})',
+                                      '(${formatMontant(v.decimal('fraisInscription'), v.texte('deviseFrais'))})',
                                   ].join(' '),
                                   overflow: TextOverflow.ellipsis,
                                 ),

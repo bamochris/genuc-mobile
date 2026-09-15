@@ -51,7 +51,11 @@ class Paiement {
       reference: json['reference'] ?? '',
       type: json['type'] ?? '',
       montant: _safeDouble(json['montant']),
-      devise: json['devise'] ?? 'USD',
+      // Vide, et non « USD » : `/situation` ne sert pas la devise, et la
+      // supposer ici étiquetait en dollars les paiements d'un établissement
+      // qui facture en francs. `formatMontant` retombe alors sur la devise de
+      // l'établissement, lue au serveur par `DeviseProvider`.
+      devise: json['devise']?.toString() ?? '',
       datePaiement: json['datePaiement'] ?? json['date'] ?? '',
       statut: json['statut'] ?? 'EN_ATTENTE',
       modePaiement: json['modePaiement'] ?? json['methode'],

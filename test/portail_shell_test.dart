@@ -15,6 +15,7 @@ import 'package:genuc_mobile/data/services/professeur_service.dart';
 import 'package:genuc_mobile/domain/entities/user.dart';
 import 'package:genuc_mobile/presentation/navigation/portail_shell.dart';
 import 'package:genuc_mobile/presentation/providers/auth_provider.dart';
+import 'package:genuc_mobile/presentation/providers/devise_provider.dart';
 import 'package:genuc_mobile/presentation/providers/notification_provider.dart';
 import 'package:genuc_mobile/presentation/providers/professeur_provider.dart';
 import 'package:genuc_mobile/presentation/providers/student_provider.dart';
@@ -97,6 +98,15 @@ void main() {
                 ProfesseurProvider(dependencies.professeurRepository),
           ),
           ChangeNotifierProvider<ThemeProvider>(create: (_) => ThemeProvider()),
+          // Même câblage que `main.dart` : la devise de l'établissement suit
+          // la session. Sans ce fournisseur, tout écran qui affiche un
+          // montant lève `ProviderNotFoundException`.
+          ChangeNotifierProxyProvider<AuthProvider, DeviseProvider>(
+            create: (_) => DeviseProvider(dependencies.communService),
+            update: (_, auth, devise) =>
+                (devise ?? DeviseProvider(dependencies.communService))
+                  ..suivreSession(auth.user?.universiteId),
+          ),
           Provider<PresenceContexteService>(
             create: (_) => dependencies.presenceContexte,
           ),
