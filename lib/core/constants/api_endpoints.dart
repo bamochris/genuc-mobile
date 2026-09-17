@@ -400,8 +400,14 @@ class ApiEndpoints {
       '/api/messagerie/contacts/$universiteId';
   static String messagerieCibles(String universiteId) =>
       '/api/messagerie/admin/cibles/$universiteId';
+  /// Boîte d'envoi du personnel (un envoi groupé = une entrée). L'étudiant
+  /// n'en a pas besoin : sa boîte rend déjà ses envois.
+  static String messagerieEnvoyes(String utilisateurId) =>
+      '/api/messagerie/envoyes/$utilisateurId';
   static String messageMarquerLu(String messageId) =>
       '/api/messagerie/$messageId/lu';
+  static String messageMarquerNonLu(String messageId) =>
+      '/api/messagerie/$messageId/non-lu';
   static String messageRepondre(String messageId) =>
       '/api/messagerie/$messageId/repondre';
   static String messageSupprimer(String messageId) => '/api/messagerie/$messageId';

@@ -26,6 +26,13 @@ class CommunService extends ServiceApi {
         contexte: 'Vos messages n\'ont pas pu être chargés.',
       );
 
+  /// Messages envoyés par le personnel. Chaque entrée porte `sens`,
+  /// `nbDestinataires` et `nbLus` (un envoi groupé n'en fait qu'une).
+  Future<List<Fiche>> messagesEnvoyes(String utilisateurId) => listeDe(
+        ApiEndpoints.messagerieEnvoyes(utilisateurId),
+        contexte: 'Vos messages envoyés n\'ont pas pu être chargés.',
+      );
+
   Future<List<Fiche>> contacts(String universiteId) =>
       listeDe(ApiEndpoints.messagerieContacts(universiteId));
 
@@ -54,6 +61,12 @@ class CommunService extends ServiceApi {
 
   Future<Fiche> marquerMessageLu(String messageId) =>
       corriger(ApiEndpoints.messageMarquerLu(messageId));
+
+  /// Réservé au destinataire (le serveur refuse l'expéditeur).
+  Future<Fiche> marquerMessageNonLu(String messageId) => corriger(
+        ApiEndpoints.messageMarquerNonLu(messageId),
+        contexte: 'Le message n\'a pas pu être marqué non lu.',
+      );
 
   // ─── Bibliothèque ──────────────────────────────────────────
 
