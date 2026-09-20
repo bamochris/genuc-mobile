@@ -5,6 +5,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/formatters.dart';
 import '../../../../data/models/etudiant/paiement.dart';
 import 'tachpay_flow.dart';
+import 'mes_recus_screen.dart';
 import '../../../providers/devise_provider.dart';
 import '../../../providers/student_provider.dart';
 import '../../../widgets/etat_widgets.dart';
@@ -48,6 +49,15 @@ class _PaiementsScreenState extends State<PaiementsScreen> {
 
     return PagePortail(
       titre: 'Mes paiements',
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.receipt_long_rounded),
+          tooltip: 'Mes reçus',
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const MesRecusScreen()),
+          ),
+        ),
+      ],
       corps: studentProvider.isLoading
           ? const EtatChargement(message: 'Chargement de votre situation financière…')
           : studentProvider.error != null

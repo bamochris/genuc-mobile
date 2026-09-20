@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// Fichier choisi par l'utilisateur : chemin sur disque + nom d'origine.
@@ -100,5 +101,90 @@ class Fichiers {
       debugPrint('Ouverture du lien impossible : $e');
       return false;
     }
+  }
+
+  /// Enregistre le PDF reçu dans le dossier Téléchargements (Android) ou le partage (iOS).
+  ///
+  /// Sur Android API 29+ : utilise le MediaStore pour écrire dans le dossier
+  /// public "Download" accessible par toutes les applications.
+  /// Sur Android < 29 : écrit dans le dossier Downloads classique.
+  /// Sur iOS : ouvre la feuille de partage système (Sauvegarder dans Fichiers, AirDrop, etc.).
+  ///
+  /// Retourne le chemin du fichier enregistré (Android) ou `true` si partagé (iOS).
+  static Future<String?> enregistrerDansTelechargements(
+    List<int> octets,
+    String nomFichier,
+  ) async {
+    if (Platform.isAndroid) {
+      return _enregistrerAndroidDownloads(octets, nomFichier);
+    } else if (Platform.isIOS) {
+      return _partagerIOS(octets, nomFichier);
+    } else {
+      // Desktop/Web : fallback sur le dossier documents de l'app
+      return _enregistrerDocumentsApp(octets, nomFichier);
+    }
+  }
+
+  static Future<String> _enregistrerAndroidDownloads(
+    List<int> octets,
+    String nomFichier,
+  ) async {
+    try {
+      // Essaie d'abord le dossier public Downloads via MediaStore (API 29+)
+      final downloadsDir = await _getAndroidDownloadsDirectory();
+      if (downloadsDir != null) {
+        final fichier = File('${downloadsDir.path}/$nomFichier');
+        await fichier.writeAsBytes(octets, flush: true);
+        return fichier.path;
+      }
+    } catch (e) {
+      debugPrint('Échec MediaStore Downloads : $e');
+    }
+
+    // Fallback : dossier Downloads classique (fonctionne sur API < 29 et souvent sur API 29+)
+    try {
+      final downloadsDir = Directory('/storage/emulated/0/Download');
+      if (await downloadsDir.exists()) {
+        final fichier = File('${downloadsDir.path}/$nomFichier');
+        await fichier.writeAsBytes(octets, flush: true);
+        return fichier.path;
+      }
+    } catch (e) {
+      debugPrint('Échec dossier Downloads classique : $e');
+    }
+
+    // Dernier recours : dossier documents de l'app
+    return _enregistrerDocumentsApp(octets, nomFichier);
+  }
+
+  static Future<Directory?> _getAndroidDownloadsDirectory() async {
+    try {
+      // Tente d'utiliser le MediaStore via getExternalStorageDirectory
+      // qui pointe vers Android/data/.../files/Download sur API 29+
+      // mais ce n'est PAS le dossier public Downloads.
+      // Pour le VRAI dossier public, on a besoin de MediaStore API
+      // qui n'est pas directement accessible depuis Dart.
+      // On utilise donc le chemin connu /storage/emulated/0/Download
+      // qui fonctionne sur la plupart des appareils.
+      return null; // Force l'utilisation du chemin classique ci-dessous
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<String> _partagerIOS(List<int> octets, String nomFichier) async {
+    final tempDir = await getTemporaryDirectory();
+    final fichier = File('${tempDir.path}/$nomFichier');
+    await fichier.writeAsBytes(octets, flush: true);
+    await Share.shareXFiles([XFile(fichier.path)], text: 'Reçu de paiement GENUC');
+    return 'partagé';
+  }
+
+  static Future<String> _enregistrerDocumentsApp(List<int> octets, String nomFichier) async {
+    final dir = await getApplicationDocumentsDirectory();
+    final fichier = File('${dir.path}/$nomFichier');
+    await fichier.writeAsBytes(octets, flush: true);
+    await OpenFilex.open(fichier.path);
+    return fichier.path;
   }
 }

@@ -11,17 +11,19 @@
 // flux est atteint depuis l'app connectée.
 
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:path_provider/path_provider.dart';
 
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/formatters.dart';
+import '../../../../core/utils/fichiers.dart';
 import '../../../../data/services/tachpay_service.dart';
+import '../../../../data/services/recu_historique_service.dart';
 import '../../../../core/utils/dio_client.dart';
+import 'pdf_viewer_screen.dart';
+import 'mes_recus_screen.dart';
 
 /// Point d'entrée du flux — pousse les 3 écrans en séquence.
 void ouvrirFluxTachPay(BuildContext context) {
@@ -133,6 +135,15 @@ class _TachPayEcranFraisState extends State<TachPayEcranFrais> {
         elevation: 0.5,
         centerTitle: true,
         title: Image.asset('assets/images/logo-tachpay.png', height: 34),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.receipt_long_rounded),
+            tooltip: 'Mes reçus',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const MesRecusScreen()),
+            ),
+          ),
+        ],
       ),
       body: _chargement
           ? const Center(child: CircularProgressIndicator(color: AppTheme.primary))
@@ -515,10 +526,21 @@ class _TachPayEcranPaiementState extends State<TachPayEcranPaiement> {
     final fondPage = estSombre ? const Color(0xFF0D1420) : const Color(0xFFF6F8FB);
     return Scaffold(
       backgroundColor: fondPage,
-      appBar: AppBar(title: const Text('Moyen de paiement'),
+      appBar: AppBar(
+        title: const Text('Moyen de paiement'),
         backgroundColor: estSombre ? const Color(0xFF16202E) : Colors.white,
         foregroundColor: estSombre ? Colors.white : Colors.black87,
-        elevation: 0.5),
+        elevation: 0.5,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.receipt_long_rounded),
+            tooltip: 'Mes reçus',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const MesRecusScreen()),
+            ),
+          ),
+        ],
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -815,17 +837,78 @@ class _TachPayEcranConfirmationState extends State<TachPayEcranConfirmation> {
   }
 
 
+  /// Ouvre le bon en plein écran. Le téléchargement peut échouer (réseau,
+  /// session) : sans ce garde, l'appui n'aurait produit aucune réaction
+  /// visible, l'erreur restant dans la console.
+  Future<void> _voirPdf(BonDePaiementInfo bon) async {
+    setState(() => _telechargement = true);
+    try {
+      final octets = await widget.service.telechargerBonPdf(bon.numero);
+      if (!mounted) return;
+      await PdfViewerScreen.ouvrir(
+        context,
+        pdfBytes: Uint8List.fromList(octets),
+        titre: widget.estBonDeCaisse ? 'Bon de caisse' : 'Reçu de paiement',
+        numeroBon: bon.numero,
+        montant: bon.montant,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Impossible d’ouvrir le bon : $e')));
+    } finally {
+      if (mounted) setState(() => _telechargement = false);
+    }
+  }
+
   Future<void> _telechargerPdf(BonDePaiementInfo bon) async {
     setState(() => _telechargement = true);
     try {
       final octets = await widget.service.telechargerBonPdf(bon.numero);
-      final dir = await getApplicationDocumentsDirectory();
-      final fichier = File('${dir.path}/bon_paiement_${bon.numero}.pdf');
-      await fichier.writeAsBytes(Uint8List.fromList(octets));
+      final bytes = Uint8List.fromList(octets);
+
+      // Enregistre dans Téléchargements (Android) / Partage (iOS)
+      final resultat = await Fichiers.enregistrerDansTelechargements(
+        octets,
+        'bon_paiement_${bon.numero}.pdf',
+      );
+
+      // Ajoute à l'historique local
+      await RecuHistoriqueService.ajouter(RecuHistorique(
+        numero: bon.numero,
+        montant: bon.montant,
+        dateGeneration: bon.dateGeneration,
+        type: widget.estBonDeCaisse ? 'bon' : 'recu',
+        referencePaiement: widget.reference,
+        affectationIds: widget.affectationIds,
+        dateAjout: DateTime.now(),
+      ));
+
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Bon enregistré : ${fichier.path}'),
-          duration: const Duration(seconds: 5)));
+
+      if (resultat != null && resultat != 'partagé') {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: const Text('Bon enregistré dans Téléchargements'),
+          duration: const Duration(seconds: 4),
+          action: SnackBarAction(
+            label: 'Voir',
+            onPressed: () => PdfViewerScreen.ouvrir(
+              context,
+              pdfBytes: bytes,
+              titre: widget.estBonDeCaisse ? 'Bon de caisse' : 'Reçu de paiement',
+              numeroBon: bon.numero,
+              montant: bon.montant,
+            ),
+          ),
+        ));
+      } else if (resultat == 'partagé') {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Partage ouvert — sauvegardez dans Fichiers'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -840,9 +923,21 @@ class _TachPayEcranConfirmationState extends State<TachPayEcranConfirmation> {
     final estSombre = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
       backgroundColor: estSombre ? const Color(0xFF0D1420) : const Color(0xFFF6F8FB),
-      appBar: AppBar(title: Image.asset('assets/images/logo-tachpay.png', height: 30),
+      appBar: AppBar(
+        title: Image.asset('assets/images/logo-tachpay.png', height: 30),
         backgroundColor: estSombre ? const Color(0xFF16202E) : Colors.white,
-        elevation: 0.5, centerTitle: true),
+        elevation: 0.5,
+        centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.receipt_long_rounded),
+            tooltip: 'Mes reçus',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const MesRecusScreen()),
+            ),
+          ),
+        ],
+      ),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -892,11 +987,23 @@ class _TachPayEcranConfirmationState extends State<TachPayEcranConfirmation> {
                         trailing: _telechargement
                             ? const SizedBox(width: 20, height: 20,
                                 child: CircularProgressIndicator(strokeWidth: 2))
-                            : IconButton(
-                                icon: const Icon(Icons.download_rounded,
-                                    color: AppTheme.primary),
-                                tooltip: 'Télécharger le bon ${bon.numero}',
-                                onPressed: () => _telechargerPdf(bon)),
+                            : Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.visibility_rounded,
+                                        color: AppTheme.info),
+                                    tooltip: 'Voir le bon ${bon.numero} en plein écran',
+                                    onPressed: () => _voirPdf(bon),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.download_rounded,
+                                        color: AppTheme.primary),
+                                    tooltip: 'Télécharger le bon ${bon.numero}',
+                                    onPressed: () => _telechargerPdf(bon),
+                                  ),
+                                ],
+                              ),
                       )),
               ]),
             ),
