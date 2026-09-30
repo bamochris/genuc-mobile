@@ -23,6 +23,14 @@ class ApiEndpoints {
   static const String twoFactorStatus = '/api/auth/2fa/status';
   static const String twoFactorLoginVerify = '/api/auth/2fa/login-verify';
 
+  // ─── Première connexion (dossiers repris des registres) ────
+  // Compte créé par la migration, fermé et sans adresse utilisable : le
+  // matricule et la date de naissance rendent un jeton d'activation de
+  // 30 min, puis le mot de passe se choisit comme après un courriel.
+  static const String premiereConnexion = '/api/activation/premiere-connexion';
+  static const String activationCreerMotDePasse =
+      '/api/activation/creer-mot-de-passe';
+
   // ─── Portail étudiant ──────────────────────────────────────
   static const String _portal = '/api/etudiant/portal';
 
@@ -105,6 +113,9 @@ class ApiEndpoints {
       '/api/etudiant/$utilisateurId/cours';
 
   // ─── Résultats, délibération, bulletins ────────────────────
+  /// UE non validées lors d'un passage avec dette (LMD), et leur solde.
+  static String deliberationDettes(String inscriptionId) =>
+      '/api/deliberation/inscription/$inscriptionId/dettes';
   static String deliberationBulletin(String inscriptionId) =>
       '/api/deliberation/bulletin/$inscriptionId';
   static const String deliberationEtudiantPdf = '/api/deliberation/etudiant/pdf';
@@ -383,11 +394,9 @@ class ApiEndpoints {
   static const String cours = '/api/cours';
 
   // ─── Documents ─────────────────────────────────────────────
-  static const String attestations = '/api/attestations';
   static const String carteEtudiant = '/api/carte-etudiant';
 
   // ─── Messagerie ────────────────────────────────────────────
-  static const String messagerie = '/api/messagerie';
   static const String messagerieEnvoyer = '/api/messagerie/envoyer';
 
   static String messagesNonLus(String destinataireId) =>

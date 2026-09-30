@@ -376,6 +376,9 @@ class DocumentsOfficielsScreen extends StatelessWidget {
         'DISPONIBLE' => ('Disponible', AppTheme.statutVert),
         'DEMANDE_EN_COURS' => ('Demande en cours', AppTheme.statutOrange),
         'PAIEMENT_REQUIS' => ('Paiement requis', AppTheme.statutRouge),
+        // Document réservé aux étudiants à jour de leurs frais (réglable par
+        // document côté administration) : il n'est pas payant, il est retenu.
+        'FRAIS_IMPAYES' => ('Frais à régler', AppTheme.statutRouge),
         'A_DEMANDER' => ('À demander', AppTheme.statutBleu),
         _ => null,
       };

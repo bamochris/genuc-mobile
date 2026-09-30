@@ -262,6 +262,7 @@ class ParcoursScreen extends StatefulWidget {
 
 class _ParcoursScreenState extends State<ParcoursScreen> {
   Fiche? _donnees;
+  List<Fiche> _dettes = const [];
   bool _chargement = true;
   String? _erreur;
 
@@ -286,12 +287,18 @@ class _ParcoursScreenState extends State<ParcoursScreen> {
       _erreur = null;
     });
     try {
-      final donnees = await context
-          .read<EtudiantAcademiqueService>()
-          .parcours(inscriptionId);
+      final service = context.read<EtudiantAcademiqueService>();
+      // Les UE en dette sont un complément : leur échec ne doit pas masquer
+      // le parcours (le web les tait de même).
+      final dettes = service
+          .dettesUe(inscriptionId)
+          .catchError((_) => const <Fiche>[]);
+      final donnees = await service.parcours(inscriptionId);
+      final listeDettes = await dettes;
       if (!mounted) return;
       setState(() {
         _donnees = donnees;
+        _dettes = listeDettes;
         _chargement = false;
       });
     } on ApiException catch (e) {
@@ -385,6 +392,26 @@ class _ParcoursScreenState extends State<ParcoursScreen> {
               _CarteAnnee(annee: annee),
               const SizedBox(height: 12),
             ],
+            if (_dettes.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              const EnteteSection(
+                titre: 'UE en dette',
+                icone: Icons.push_pin_rounded,
+              ),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  "Unités d'enseignement non validées lors d'un passage avec "
+                  "dette. Une UE due doit être validée avant l'obtention du "
+                  'diplôme.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+              for (final dette in _dettes) ...[
+                _CarteDetteUe(dette: dette),
+                const SizedBox(height: 8),
+              ],
+            ],
           ],
         ),
       ),
@@ -396,6 +423,57 @@ class _ParcoursScreenState extends State<ParcoursScreen> {
     final fin = stats.texte('anneeFin');
     if (debut.isEmpty && fin.isEmpty) return null;
     return [debut, fin].where((a) => a.isNotEmpty).join(' → ');
+  }
+}
+
+class _CarteDetteUe extends StatelessWidget {
+  final Fiche dette;
+
+  const _CarteDetteUe({required this.dette});
+
+  @override
+  Widget build(BuildContext context) {
+    final soldee = dette.texte('statut') == 'SOLDEE';
+    final code = dette.texte('code');
+    final cours = dette.texte('cours');
+    final origine = [dette.texte('niveauOrigine'), dette.texte('anneeOrigine')]
+        .where((t) => t.isNotEmpty)
+        .join(' ');
+    return CartePortail(
+      child: Row(
+        children: [
+          Icon(
+            soldee ? Icons.check_circle_rounded : Icons.hourglass_top_rounded,
+            color: soldee ? AppTheme.statutVert : AppTheme.statutOrange,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  [code, cours].where((t) => t.isNotEmpty).join(' — '),
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodyMedium
+                      ?.copyWith(fontWeight: FontWeight.w600),
+                ),
+                Text(
+                  [
+                    '${dette.entier('credits')} crédits',
+                    if (origine.isNotEmpty) 'origine $origine',
+                    soldee
+                        ? 'validée en ${dette.texte('anneeSolde')}'
+                        : 'à valider',
+                  ].join(' · '),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

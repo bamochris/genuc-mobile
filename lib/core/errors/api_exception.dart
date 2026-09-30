@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 
 /// Erreur d'appel API portant un message affichable à l'utilisateur.
@@ -16,11 +18,34 @@ class ApiException implements Exception {
   bool get estNonAutorise => statusCode == 401;
   bool get estInterdit => statusCode == 403;
 
+  /// Résultats ou document retenus parce que l'étudiant doit des frais.
+  /// 402 et non 403 côté serveur : ce n'est pas un défaut de droit.
+  bool get estFraisImpayes => statusCode == 402 || code == 'FRAIS_IMPAYES';
+
+  /// Le corps d'erreur tel qu'il arrive : un Map en JSON, mais des OCTETS
+  /// quand l'appel demandait un fichier (`ResponseType.bytes`) — le refus
+  /// d'un PDF ne disait alors que « Erreur serveur (402) ».
+  static Map? _corps(dynamic data) {
+    if (data is Map) return data;
+    try {
+      final texte = data is List<int>
+          ? utf8.decode(data, allowMalformed: true)
+          : data is String
+              ? data
+              : null;
+      if (texte == null || texte.isEmpty) return null;
+      final decode = jsonDecode(texte);
+      return decode is Map ? decode : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   factory ApiException.fromDio(DioException error) {
     final response = error.response;
-    final data = response?.data;
+    final data = _corps(response?.data);
 
-    if (data is Map) {
+    if (data != null) {
       final message = (data['erreur'] ?? data['error'] ?? data['message']);
       if (message is String && message.isNotEmpty) {
         return ApiException(
@@ -41,6 +66,7 @@ class ApiException implements Exception {
       DioExceptionType.cancel => 'Requête annulée',
       DioExceptionType.badResponse => switch (response?.statusCode) {
           401 => 'Session expirée, veuillez vous reconnecter',
+          402 => 'Contenu retenu tant que vos frais ne sont pas réglés.',
           403 => 'Accès refusé',
           404 => 'Ressource introuvable',
           429 => 'Trop de tentatives. Réessayez dans quelques minutes.',

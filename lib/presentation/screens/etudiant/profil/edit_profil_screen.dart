@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../../core/errors/api_exception.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../data/models/etudiant/etudiant_profile_backend.dart';
 import '../../../providers/auth_provider.dart';
@@ -80,7 +81,15 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
           Navigator.pop(context, true);
         }
       }
+    } on ApiException catch (e) {
+      // Le serveur dit POURQUOI il refuse (« adresse déjà utilisée »,
+      // « adresse invalide ») : un message générique laissait retaper la
+      // même valeur sans savoir ce qu'on lui reprochait.
+      if (!mounted) return;
+      setState(() => _errorMessage = e.message);
+      _showErrorSnackBar(e.message);
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _errorMessage = 'Erreur lors de la mise à jour : ${e.runtimeType}';
       });

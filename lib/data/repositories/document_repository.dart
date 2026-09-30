@@ -5,8 +5,6 @@ class DocumentRepository {
 
   DocumentRepository(this.api);
 
-  Future<List<dynamic>> getAttestations() => api.getAttestations();
-
   /// Documents officiels d'un dossier (relevés, attestations générées…).
   /// Il n'existe pas d'endpoint `/api/diplomes` côté backend : les diplômes
   /// remontent dans cette réponse.

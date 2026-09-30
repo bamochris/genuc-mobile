@@ -20,6 +20,10 @@ class EtudiantProfile {
   final bool photo;
   final bool acte;
 
+  /// Dossier repris des registres sans adresse : le serveur rend `email`
+  /// vide et ce drapeau, plutôt que l'adresse fabriquée qui ne reçoit rien.
+  final bool emailDeRemplacement;
+
   EtudiantProfile({
     required this.id,
     required this.matricule,
@@ -39,6 +43,7 @@ class EtudiantProfile {
     required this.bulletin,
     required this.photo,
     required this.acte,
+    this.emailDeRemplacement = false,
   });
 
   factory EtudiantProfile.fromJson(Map<String, dynamic> json) {
@@ -61,6 +66,7 @@ class EtudiantProfile {
       bulletin: json['bulletin'] ?? false,
       photo: json['photo'] ?? false,
       acte: json['acte'] ?? false,
+      emailDeRemplacement: json['emailDeRemplacement'] == true,
     );
   }
 

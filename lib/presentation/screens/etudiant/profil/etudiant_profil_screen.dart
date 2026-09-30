@@ -98,6 +98,10 @@ class _ContenuProfil extends StatelessWidget {
         children: [
           _PhotoSection(profile: profile),
           const SizedBox(height: 24),
+          if (profile.emailDeRemplacement) ...[
+            _AdresseManquante(profile: profile),
+            const SizedBox(height: 24),
+          ],
           _InformationsPersonnelles(profile: profile),
           const SizedBox(height: 24),
           _InformationsAcademiques(profile: profile),
@@ -211,6 +215,55 @@ class _PhotoPlaceholder extends StatelessWidget {
             color: accent,
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Dossier repris des registres : aucune adresse n'a été fournie, la
+/// plateforme en a fabriqué une qui ne reçoit rien. Tant que l'étudiant n'a
+/// pas donné la sienne, « mot de passe oublié » ne peut pas l'aider.
+class _AdresseManquante extends StatelessWidget {
+  final EtudiantProfile profile;
+
+  const _AdresseManquante({required this.profile});
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.statutOrange.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.statutOrange),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Votre adresse électronique manque',
+            style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Votre dossier a été repris depuis les registres de votre '
+            'établissement, qui ne portait pas votre adresse. Renseignez-la : '
+            'elle vous permettra de recevoir un mot de passe temporaire si '
+            'vous oubliez le vôtre. Vous continuerez à vous connecter avec '
+            'votre matricule.',
+            style: textTheme.bodySmall,
+          ),
+          const SizedBox(height: 10),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => EditProfilScreen(profile: profile),
+              ),
+            ),
+            child: const Text('Ajouter mon adresse'),
+          ),
+        ],
       ),
     );
   }

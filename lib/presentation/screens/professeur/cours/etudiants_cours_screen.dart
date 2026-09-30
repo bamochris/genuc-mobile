@@ -56,6 +56,16 @@ class EtudiantsCoursScreen extends StatelessWidget {
             .where((v) => v.isNotEmpty)
             .join(' '),
         sousTitre: (f) => f.texteOuNul('matricule'),
+        // Repasse ce cours au titre d'une dette LMD (UE non validée d'un
+        // niveau antérieur) : l'enseignant doit le savoir en notant.
+        statut: (f) => f.donnees['dette'] == true
+            ? (
+                ['Dette', f.texte('niveauOrigineDette'), f.texte('anneeOrigineDette')]
+                    .where((v) => v.isNotEmpty)
+                    .join(' '),
+                AppTheme.statutOrange,
+              )
+            : null,
         details: (f) => [
           LigneDetail(libelle: 'Promotion', valeur: f.texte('promotion')),
           LigneDetail(libelle: 'Filière', valeur: f.texte('filiere')),

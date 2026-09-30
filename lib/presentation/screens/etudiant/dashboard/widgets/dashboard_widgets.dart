@@ -197,9 +197,17 @@ class StatsCard extends StatelessWidget {
                 child: _buildStatItem(
                   context,
                   Icons.school_rounded,
-                  'Moyenne',
-                  '${dashboardData.moyenneGenerale.toStringAsFixed(2)}/20',
-                  AppTheme.primary,
+                  dashboardData.resultatsRetenus
+                      ? 'Retenue — frais à régler'
+                      : 'Moyenne',
+                  // Frais impayés : moyenne et crédits sont retenus par le
+                  // serveur, pas nuls. « 0.00/20 » annonçait un échec.
+                  dashboardData.resultatsRetenus
+                      ? '—'
+                      : '${dashboardData.moyenneGenerale.toStringAsFixed(2)}/20',
+                  dashboardData.resultatsRetenus
+                      ? AppTheme.statutRouge
+                      : AppTheme.primary,
                 ),
               ),
               const SizedBox(width: 12),
@@ -208,7 +216,9 @@ class StatsCard extends StatelessWidget {
                   context,
                   Icons.workspace_premium_rounded,
                   'Crédits',
-                  '${dashboardData.creditsValides}',
+                  dashboardData.resultatsRetenus
+                      ? '—'
+                      : '${dashboardData.creditsValides}',
                   AppTheme.success,
                 ),
               ),
@@ -520,8 +530,9 @@ class ProgressionAcademiqueCard extends StatelessWidget {
                 pourcentage: creditsPct,
                 couleur: AppTheme.primary,
                 libelle: 'Crédits validés',
-                valeur:
-                    '${dashboardData.creditsValides} / 240',
+                valeur: dashboardData.resultatsRetenus
+                    ? 'Retenus'
+                    : '${dashboardData.creditsValides} / 240',
               ),
               _JaugeLabel(
                 pourcentage: presencePct,

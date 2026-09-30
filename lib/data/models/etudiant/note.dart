@@ -74,12 +74,27 @@ class NotesResultat {
   final int creditsValides;
   final List<Note> notes;
 
+  /// Message du serveur quand les résultats sont retenus pour frais impayés
+  /// (réponse 402) ; `null` quand les notes sont lisibles.
+  final String? retenue;
+
   NotesResultat({
     required this.anneeAcademique,
     required this.moyenneGenerale,
     required this.creditsValides,
     required this.notes,
+    this.retenue,
   });
+
+  /// Résultats retenus : aucune note, aucune moyenne — seulement la raison.
+  NotesResultat.retenus(String message)
+      : anneeAcademique = '',
+        moyenneGenerale = 0,
+        creditsValides = 0,
+        notes = const [],
+        retenue = message;
+
+  bool get estRetenu => retenue != null;
 
   factory NotesResultat.fromJson(Map<String, dynamic> json) {
     return NotesResultat(
@@ -93,7 +108,7 @@ class NotesResultat {
     );
   }
 
-  bool get estReussi => moyenneGenerale >= 10;
+  bool get estReussi => !estRetenu && moyenneGenerale >= 10;
   int get reussites => notes.where((n) => n.estValide).length;
 }
 

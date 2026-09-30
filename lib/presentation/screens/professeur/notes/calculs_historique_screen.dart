@@ -151,6 +151,7 @@ class _CalculsNotesScreenState extends State<CalculsNotesScreen> {
                 .where((v) => v.isNotEmpty)
                 .join(' '),
             matricule: e.texte('matricule'),
+            dette: e.donnees['dette'] == true,
             tp: note?.decimal('noteTP') ?? 0,
             interrogation: note?.decimal('noteInterrogation') ?? 0,
             examen: note?.decimal('noteExamen') ?? 0,
@@ -275,7 +276,11 @@ class _CalculsNotesScreenState extends State<CalculsNotesScreen> {
                   for (final ligne in _lignes)
                     [
                       Text(ligne.nom),
-                      Text(ligne.matricule),
+                      // Repasse ce cours au titre d'une dette LMD : même
+                      // marque que la liste web.
+                      Text(ligne.dette
+                          ? '${ligne.matricule} · dette'
+                          : ligne.matricule),
                       Text(ligne.tp.toStringAsFixed(2)),
                       Text(ligne.interrogation.toStringAsFixed(2)),
                       Text(ligne.examen.toStringAsFixed(2)),
@@ -337,6 +342,7 @@ class _LigneCalcul {
   final String inscriptionId;
   final String nom;
   final String matricule;
+  final bool dette;
   final double tp;
   final double interrogation;
   final double examen;
@@ -345,6 +351,7 @@ class _LigneCalcul {
     required this.inscriptionId,
     required this.nom,
     required this.matricule,
+    this.dette = false,
     required this.tp,
     required this.interrogation,
     required this.examen,

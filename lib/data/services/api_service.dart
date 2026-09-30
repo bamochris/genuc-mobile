@@ -108,6 +108,34 @@ class ApiService {
     );
   }
 
+  /// Première connexion d'un étudiant repris des registres : rend le jeton
+  /// d'activation (`token`). Date au format `aaaa-mm-jj`.
+  Future<Map<String, dynamic>> premiereConnexion({
+    required String matricule,
+    required String dateNaissance,
+  }) {
+    return _post(
+      ApiEndpoints.premiereConnexion,
+      data: {'matricule': matricule, 'dateNaissance': dateNaissance},
+    );
+  }
+
+  /// Choisit le mot de passe d'un compte à activer.
+  Future<Map<String, dynamic>> creerMotDePasse({
+    required String token,
+    required String motDePasse,
+    required String confirmation,
+  }) {
+    return _post(
+      ApiEndpoints.activationCreerMotDePasse,
+      data: {
+        'token': token,
+        'motDePasse': motDePasse,
+        'confirmMotDePasse': confirmation,
+      },
+    );
+  }
+
   // ─── Portail étudiant ──────────────────────────────────────
 
   Future<Map<String, dynamic>> getDashboard(String inscriptionId) =>
@@ -226,14 +254,12 @@ class ApiService {
     fetch: () => _getList(ApiEndpoints.historiquePaiements),
   );
 
-  // ─── Documents ─────────────────────────────────────────────
-
-  Future<List<dynamic>> getAttestations() =>
-      _getList(ApiEndpoints.attestations);
-
   // ─── Messagerie ────────────────────────────────────────────
-
-  Future<List<dynamic>> getMessages() => _getList(ApiEndpoints.messagerie);
+  // `getAttestations()` et `getMessages()` retirés le 30/09/2026 : ils
+  // visaient `/api/attestations` et `/api/messagerie` NUS, qu'aucun mapping
+  // ne sert, et n'avaient aucun appelant. L'étudiant lit ses attestations
+  // par `/api/attestations/etudiant/{id}` et ses messages par
+  // `/api/messagerie/etudiant/{id}`.
 
   Future<int> getUnreadMessagesCount(String destinataireId) async {
     final data = await _get(ApiEndpoints.messagesNonLus(destinataireId));

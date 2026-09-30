@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../providers/auth_provider.dart';
+import 'premiere_connexion_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -53,6 +54,16 @@ class _LoginScreenState extends State<LoginScreen> {
     _passwordController.dispose();
     _mfaController.dispose();
     super.dispose();
+  }
+
+  Future<void> _ouvrirPremiereConnexion() async {
+    final matricule = await Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (_) => const PremiereConnexionScreen()),
+    );
+    if (matricule != null && mounted) {
+      _identifiantController.text = matricule;
+      _passwordController.clear();
+    }
   }
 
   Future<void> _submitLogin() async {
@@ -376,6 +387,13 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
           const SizedBox(height: 20),
           _BoutonPrincipal(label: 'Se connecter', onPressed: _submitLogin),
+          const SizedBox(height: 8),
+          // Dossier repris des registres : compte créé fermé, sans lien
+          // d'activation. Même entrée que « Première connexion » du web.
+          TextButton(
+            onPressed: _ouvrirPremiereConnexion,
+            child: const Text('Première connexion ? Activer mon compte'),
+          ),
         ],
       ),
     );

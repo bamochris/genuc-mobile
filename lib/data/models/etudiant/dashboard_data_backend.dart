@@ -25,6 +25,10 @@ class DashboardData {
   // Résultats académiques
   final double moyenneGenerale;
   final int creditsValides;
+
+  /// Frais impayés : le serveur retient moyenne et crédits (il les envoie
+  /// `null`). Les afficher à 0 disait « 0/20 », un échec qui n'existe pas.
+  final bool resultatsRetenus;
   
   // Situation financière
   final double soldeAPayer;
@@ -61,6 +65,7 @@ class DashboardData {
     this.vacationsDisponibles = const [],
     required this.moyenneGenerale,
     required this.creditsValides,
+    this.resultatsRetenus = false,
     required this.soldeAPayer,
     required this.progressionGlobale,
     required this.notifications,
@@ -94,6 +99,7 @@ class DashboardData {
           [],
       moyenneGenerale: (json['moyenneGenerale'] ?? 0).toDouble(),
       creditsValides: json['creditsValides'] ?? 0,
+      resultatsRetenus: json['resultatsRetenus'] == true,
       soldeAPayer: (json['soldeAPayer'] ?? 0).toDouble(),
       progressionGlobale: json['progressionGlobale'] ?? 0,
       notifications: (json['notifications'] as List?)
@@ -122,7 +128,7 @@ class DashboardData {
   }
 
   bool get hasDebts => soldeAPayer > 0;
-  bool get isReussi => moyenneGenerale >= 10;
+  bool get isReussi => !resultatsRetenus && moyenneGenerale >= 10;
   String get progressionFormatted => '$progressionGlobale%';
 }
 

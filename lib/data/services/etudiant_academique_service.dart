@@ -96,6 +96,10 @@ class EtudiantAcademiqueService extends ServiceApi {
   Future<Fiche> bulletinDeliberation(String inscriptionId) =>
       ficheDe(ApiEndpoints.deliberationBulletin(inscriptionId));
 
+  /// UE en dette : à valider avant l'obtention du diplôme.
+  Future<List<Fiche>> dettesUe(String inscriptionId) =>
+      listeDe(ApiEndpoints.deliberationDettes(inscriptionId));
+
   Future<Fiche> deliberation(String inscriptionId, String annee) =>
       ficheDe(ApiEndpoints.deliberationEtudiant(inscriptionId, annee));
 

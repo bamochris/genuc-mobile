@@ -77,6 +77,15 @@ class _ContenuNotes extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (resultat?.estRetenu == true) {
+      // Frais impayés : le serveur retient les notes (402) et dit ce qui
+      // reste dû. « Aucune note publiée » aurait menti sur la cause.
+      return EtatVide(
+        icon: Icons.lock_rounded,
+        titre: 'Résultats retenus',
+        message: resultat!.retenue,
+      );
+    }
     if (resultat == null || resultat!.notes.isEmpty) {
       return const EtatVide(
         icon: Icons.assessment_rounded,

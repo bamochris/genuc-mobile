@@ -58,7 +58,7 @@ class StudentProvider extends ChangeNotifier {
       final resultats = await Future.wait([
         repository.getDashboard(inscriptionId),
         repository.getCourses(inscriptionId),
-        repository.getNotes(inscriptionId),
+        _notesOuRetenue(inscriptionId),
         repository.getProfile(inscriptionId),
         repository.getSituationFinanciere(),
       ]);
@@ -83,8 +83,24 @@ class StudentProvider extends ChangeNotifier {
       _charger(() async => _courses = await repository.getCourses(inscriptionId));
 
   Future<void> loadNotes(String inscriptionId, {String? annee}) => _charger(
-      () async => _notesResultat =
-          await repository.getNotes(inscriptionId, annee: annee));
+      () async =>
+          _notesResultat = await _notesOuRetenue(inscriptionId, annee: annee));
+
+  /// Les notes, ou la raison pour laquelle elles sont retenues.
+  ///
+  /// Un étudiant qui doit des frais reçoit un 402 sur ses notes. Dans le
+  /// `Future.wait` du tableau de bord, cette seule erreur faisait tomber TOUT
+  /// l'écran — cours, profil et situation financière compris, c'est-à-dire
+  /// précisément ce qui lui permet de régulariser.
+  Future<NotesResultat> _notesOuRetenue(String inscriptionId,
+      {String? annee}) async {
+    try {
+      return await repository.getNotes(inscriptionId, annee: annee);
+    } on ApiException catch (e) {
+      if (e.estFraisImpayes) return NotesResultat.retenus(e.message);
+      rethrow;
+    }
+  }
 
   Future<void> loadReleve(String inscriptionId, {String? annee}) => _charger(
       () async =>
@@ -153,14 +169,17 @@ class StudentProvider extends ChangeNotifier {
     }
   }
 
+  /// Enregistre le profil et LÈVE le refus du serveur.
+  ///
+  /// Passé par `_charger`, le refus (« cette adresse est déjà utilisée »)
+  /// devenait l'erreur de chargement de l'écran PROFIL, pendant que l'écran
+  /// d'édition, qui n'en savait rien, annonçait « mis à jour avec succès ».
   Future<void> updateProfile(
     String inscriptionId,
     Map<String, dynamic> data,
-  ) {
-    return _charger(() async {
-      final result = await repository.updateProfile(inscriptionId, data);
-      _profile = result;
-    });
+  ) async {
+    _profile = await repository.updateProfile(inscriptionId, data);
+    notifyListeners();
   }
 
   Future<void> choisirVacation(String inscriptionId, int vacationId) {
