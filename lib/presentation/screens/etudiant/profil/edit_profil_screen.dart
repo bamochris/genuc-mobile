@@ -66,9 +66,10 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
       final inscriptionId = authProvider.user?.inscriptionId;
 
       if (inscriptionId != null) {
+        // Ni nom ni prénom : pour un étudiant, le serveur les IGNORE (état
+        // civil, corrigé par l'administration). Les envoyer faisait annoncer
+        // « Profil mis à jour » pour une modification jamais enregistrée.
         final data = {
-          'nom': _nomController.text.trim(),
-          'prenom': _prenomController.text.trim(),
           'email': _emailController.text.trim(),
           'telephone': _telephoneController.text.trim(),
           'telephoneSecondaire': _telephoneSecondaireController.text.trim(),
@@ -158,24 +159,14 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
                   controller: _nomController,
                   label: 'Nom',
                   icon: Icons.person_rounded,
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Le nom est requis';
-                    }
-                    return null;
-                  },
+                  lectureSeule: true,
                 ),
                 const SizedBox(height: 16),
                 _ChampTexte(
                   controller: _prenomController,
                   label: 'Prénom',
                   icon: Icons.person_rounded,
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Le prénom est requis';
-                    }
-                    return null;
-                  },
+                  lectureSeule: true,
                 ),
                 const SizedBox(height: 16),
                 _ChampTexte(
@@ -297,6 +288,7 @@ class _ChampTexte extends StatelessWidget {
   final IconData icon;
   final TextInputType? keyboardType;
   final String? Function(String?)? validator;
+  final bool lectureSeule;
 
   const _ChampTexte({
     required this.controller,
@@ -304,6 +296,7 @@ class _ChampTexte extends StatelessWidget {
     required this.icon,
     this.keyboardType,
     this.validator,
+    this.lectureSeule = false,
   });
 
   @override
@@ -312,9 +305,11 @@ class _ChampTexte extends StatelessWidget {
       controller: controller,
       keyboardType: keyboardType,
       validator: validator,
+      readOnly: lectureSeule,
       decoration: InputDecoration(
         labelText: label,
         prefixIcon: Icon(icon),
+        suffixIcon: lectureSeule ? const Icon(Icons.lock_outline_rounded, size: 18) : null,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
         ),
@@ -345,7 +340,9 @@ class _InfoSection extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              'Les modifications seront appliquées immédiatement à votre profil.',
+              'Les modifications seront appliquées immédiatement à votre profil. '
+              'Nom, prénom, date et lieu de naissance relèvent de l\'état civil : '
+              'ils se corrigent au secrétariat académique, sur pièce.',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: AppTheme.info,
               ),

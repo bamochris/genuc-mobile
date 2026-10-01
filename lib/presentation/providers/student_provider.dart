@@ -182,11 +182,24 @@ class StudentProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> choisirVacation(String inscriptionId, int vacationId) {
-    return _charger(() async {
+  /// Le refus du serveur REMONTE à l'appelant.
+  ///
+  /// Passé par `_charger`, il était avalé dans `_error` et l'écran annonçait
+  /// « Vacation enregistrée » quoi qu'il arrive. Or le serveur refuse désormais
+  /// un second choix (« déjà choisie : adressez-vous au secrétariat ») et une
+  /// vacation fermée à la promotion. Le tableau de bord est relu dans les deux
+  /// cas : après un refus « déjà choisie », la carte de choix doit disparaître.
+  Future<void> choisirVacation(String inscriptionId, int vacationId) async {
+    try {
       await repository.choisirVacation(inscriptionId, vacationId);
-      _dashboard = await repository.getDashboard(inscriptionId);
-    });
+    } finally {
+      try {
+        _dashboard = await repository.getDashboard(inscriptionId);
+        notifyListeners();
+      } catch (_) {
+        // La relecture est un confort : son échec ne masque pas le résultat.
+      }
+    }
   }
 
   Future<void> _charger(Future<void> Function() action) async {

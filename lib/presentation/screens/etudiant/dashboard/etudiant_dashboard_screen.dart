@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../../core/errors/api_exception.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../data/models/etudiant/dashboard_data_backend.dart';
 import '../../../../data/models/etudiant/paiement.dart';
@@ -104,12 +105,22 @@ class _ContenuDashboard extends StatelessWidget {
                 final authProvider = context.read<AuthProvider>();
                 final inscriptionId = authProvider.user?.inscriptionId;
                 if (inscriptionId != null) {
-                  await studentProvider.choisirVacation(inscriptionId, vId);
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
+                  final messenger = ScaffoldMessenger.of(context);
+                  try {
+                    await studentProvider.choisirVacation(inscriptionId, vId);
+                    messenger.showSnackBar(
                       const SnackBar(
                         content: Text('Vacation enregistrée avec succès !'),
                         backgroundColor: AppTheme.success,
+                      ),
+                    );
+                  } on ApiException catch (e) {
+                    // Le serveur dit pourquoi : vacation déjà choisie, ou
+                    // fermée à la promotion.
+                    messenger.showSnackBar(
+                      SnackBar(
+                        content: Text(e.message),
+                        backgroundColor: AppTheme.error,
                       ),
                     );
                   }
