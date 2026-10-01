@@ -152,6 +152,7 @@ class _MonEvaluationScreenState extends State<MonEvaluationScreen> {
   List<Fiche> _evaluations = const [];
   bool _chargement = true;
   String? _erreur;
+  String? _indisponible;
 
   @override
   void initState() {
@@ -164,6 +165,7 @@ class _MonEvaluationScreenState extends State<MonEvaluationScreen> {
     setState(() {
       _chargement = true;
       _erreur = null;
+      _indisponible = null;
     });
     try {
       final evaluations = await context
@@ -177,7 +179,16 @@ class _MonEvaluationScreenState extends State<MonEvaluationScreen> {
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() {
-        _erreur = e.message;
+        // 501 : le module d'évaluation des enseignants n'existe pas encore côté
+        // serveur (depuis le 01/10/2026 il le dit, au lieu de rendre des
+        // moyennes à zéro). Ce n'est pas une panne : rien à réessayer, on
+        // affiche son message comme un état vide.
+        if (e.statusCode == 501) {
+          _evaluations = const [];
+          _indisponible = e.message;
+        } else {
+          _erreur = e.message;
+        }
         _chargement = false;
       });
     }
@@ -206,7 +217,7 @@ class _MonEvaluationScreenState extends State<MonEvaluationScreen> {
         erreur: _erreur,
         vide: _evaluations.isEmpty,
         onReessayer: _charger,
-        messageVide: 'Aucune évaluation reçue pour le moment.',
+        messageVide: _indisponible ?? 'Aucune évaluation reçue pour le moment.',
         iconeVide: Icons.star_rounded,
         enfant: ListView(
           padding: Responsive.margePage(context),
