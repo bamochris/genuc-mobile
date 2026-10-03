@@ -24,7 +24,15 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
   final _prenomController = TextEditingController();
   final _emailController = TextEditingController();
   final _telephoneController = TextEditingController();
-  final _telephoneSecondaireController = TextEditingController();
+  final _dateNaissanceController = TextEditingController();
+  final _lieuNaissanceController = TextEditingController();
+
+  // Date et lieu de naissance : l'étudiant peut les COMPLÉTER tant qu'ils sont
+  // vides (règle du serveur, `EtudiantPortalController.updateProfil`) ; une fois
+  // renseignés, ils se corrigent au secrétariat. Figé à l'ouverture de l'écran.
+  bool _dateNaissanceModifiable = false;
+  bool _lieuNaissanceModifiable = false;
+  DateTime? _dateNaissance;
 
   bool _isLoading = false;
   String? _errorMessage;
@@ -38,6 +46,16 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
       _emailController.text = widget.profile!.email;
       _telephoneController.text = widget.profile!.telephone;
     }
+    final date = widget.profile?.dateNaissance;
+    final lieu = widget.profile?.lieuNaissance;
+    _dateNaissanceModifiable = date == null || date.trim().isEmpty;
+    _lieuNaissanceModifiable = lieu == null || lieu.trim().isEmpty;
+    if (!_dateNaissanceModifiable) {
+      _dateNaissance = DateTime.tryParse(date!);
+      _dateNaissanceController.text =
+          _dateNaissance != null ? _formaterDate(_dateNaissance!) : date;
+    }
+    if (!_lieuNaissanceModifiable) _lieuNaissanceController.text = lieu!;
   }
 
   @override
@@ -46,7 +64,8 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
     _prenomController.dispose();
     _emailController.dispose();
     _telephoneController.dispose();
-    _telephoneSecondaireController.dispose();
+    _dateNaissanceController.dispose();
+    _lieuNaissanceController.dispose();
     super.dispose();
   }
 
@@ -69,11 +88,22 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
         // Ni nom ni prénom : pour un étudiant, le serveur les IGNORE (état
         // civil, corrigé par l'administration). Les envoyer faisait annoncer
         // « Profil mis à jour » pour une modification jamais enregistrée.
-        final data = {
+        // Même raison pour le téléphone secondaire, retiré : le serveur ne le
+        // lit pas.
+        final data = <String, dynamic>{
           'email': _emailController.text.trim(),
           'telephone': _telephoneController.text.trim(),
-          'telephoneSecondaire': _telephoneSecondaireController.text.trim(),
         };
+        // Envoyés seulement s'ils étaient vides et viennent d'être remplis :
+        // une valeur déjà enregistrée renvoyée telle quelle est acceptée, mais
+        // inutile ; une valeur modifiée serait refusée (403).
+        if (_dateNaissanceModifiable && _dateNaissance != null) {
+          data['dateNaissance'] = _dateIso(_dateNaissance!);
+        }
+        final lieu = _lieuNaissanceController.text.trim();
+        if (_lieuNaissanceModifiable && lieu.isNotEmpty) {
+          data['lieuNaissance'] = lieu;
+        }
 
         await studentProvider.updateProfile(inscriptionId, data);
 
@@ -103,6 +133,31 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
       }
     }
   }
+
+  Future<void> _choisirDateNaissance() async {
+    final maintenant = DateTime.now();
+    final choisie = await showDatePicker(
+      context: context,
+      initialDate: _dateNaissance ?? DateTime(maintenant.year - 20),
+      firstDate: DateTime(1900),
+      lastDate: maintenant,
+      helpText: 'Date de naissance',
+    );
+    if (choisie == null || !mounted) return;
+    setState(() {
+      _dateNaissance = choisie;
+      _dateNaissanceController.text = _formaterDate(choisie);
+    });
+  }
+
+  static String _deuxChiffres(int n) => n.toString().padLeft(2, '0');
+
+  /// Format attendu par le serveur (`LocalDate.parse`).
+  static String _dateIso(DateTime d) =>
+      '${d.year}-${_deuxChiffres(d.month)}-${_deuxChiffres(d.day)}';
+
+  static String _formaterDate(DateTime d) =>
+      '${_deuxChiffres(d.day)}/${_deuxChiffres(d.month)}/${d.year}';
 
   void _showSuccessSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -199,10 +254,23 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
                 ),
                 const SizedBox(height: 16),
                 _ChampTexte(
-                  controller: _telephoneSecondaireController,
-                  label: 'Téléphone secondaire (optionnel)',
-                  icon: Icons.phone_android_rounded,
-                  keyboardType: TextInputType.phone,
+                  controller: _dateNaissanceController,
+                  label: _dateNaissanceModifiable
+                      ? 'Date de naissance (à compléter)'
+                      : 'Date de naissance',
+                  icon: Icons.cake_rounded,
+                  lectureSeule: true,
+                  verrouille: !_dateNaissanceModifiable,
+                  onTap: _dateNaissanceModifiable ? _choisirDateNaissance : null,
+                ),
+                const SizedBox(height: 16),
+                _ChampTexte(
+                  controller: _lieuNaissanceController,
+                  label: _lieuNaissanceModifiable
+                      ? 'Lieu de naissance (à compléter)'
+                      : 'Lieu de naissance',
+                  icon: Icons.place_rounded,
+                  lectureSeule: !_lieuNaissanceModifiable,
                 ),
               ],
             ),
@@ -289,6 +357,10 @@ class _ChampTexte extends StatelessWidget {
   final TextInputType? keyboardType;
   final String? Function(String?)? validator;
   final bool lectureSeule;
+  // Cadenas affiché : par défaut, tout champ en lecture seule. Le sélecteur de
+  // date est en lecture seule (saisie au calendrier) sans être verrouillé.
+  final bool? verrouille;
+  final VoidCallback? onTap;
 
   const _ChampTexte({
     required this.controller,
@@ -297,6 +369,8 @@ class _ChampTexte extends StatelessWidget {
     this.keyboardType,
     this.validator,
     this.lectureSeule = false,
+    this.verrouille,
+    this.onTap,
   });
 
   @override
@@ -306,10 +380,15 @@ class _ChampTexte extends StatelessWidget {
       keyboardType: keyboardType,
       validator: validator,
       readOnly: lectureSeule,
+      onTap: onTap,
       decoration: InputDecoration(
         labelText: label,
         prefixIcon: Icon(icon),
-        suffixIcon: lectureSeule ? const Icon(Icons.lock_outline_rounded, size: 18) : null,
+        suffixIcon: (verrouille ?? lectureSeule)
+            ? const Icon(Icons.lock_outline_rounded, size: 18)
+            : onTap != null
+                ? const Icon(Icons.calendar_month_rounded, size: 18)
+                : null,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
         ),
@@ -342,7 +421,8 @@ class _InfoSection extends StatelessWidget {
             child: Text(
               'Les modifications seront appliquées immédiatement à votre profil. '
               'Nom, prénom, date et lieu de naissance relèvent de l\'état civil : '
-              'ils se corrigent au secrétariat académique, sur pièce.',
+              'vous pouvez compléter la date et le lieu s\'ils sont vides ; '
+              'une fois renseignés, ils se corrigent au secrétariat académique, sur pièce.',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: AppTheme.info,
               ),
