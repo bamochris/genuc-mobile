@@ -242,7 +242,44 @@ class _StatsFinancieres extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         _BarreProgression(pourcentage: situation.pourcentage),
+        if (situation.devisesMultiples) ...[
+          const SizedBox(height: 12),
+          _TotauxParDevise(parDevise: situation.parDevise),
+        ],
       ],
+    );
+  }
+}
+
+/// Le détail par devise, seule lecture juste quand l'étudiant doit en USD et
+/// en CDF : les totaux ci-dessus les additionnent.
+class _TotauxParDevise extends StatelessWidget {
+  final Map<String, TotauxDevise> parDevise;
+
+  const _TotauxParDevise({required this.parDevise});
+
+  @override
+  Widget build(BuildContext context) {
+    final style = TextStyle(fontSize: 13, color: AppTheme.textSecondaryOf(context));
+    return CartePortail(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Vos frais sont libellés dans plusieurs devises',
+              style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: 8),
+          for (final e in parDevise.entries)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                '${e.key} — attendu ${formatMontant(e.value.attendu, e.key)}, '
+                'payé ${formatMontant(e.value.paye, e.key)}, '
+                'reste ${formatMontant(e.value.reste, e.key)}',
+                style: style,
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

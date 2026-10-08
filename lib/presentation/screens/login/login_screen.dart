@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../providers/auth_provider.dart';
+import 'mot_de_passe_oublie_screen.dart';
 import 'premiere_connexion_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -393,6 +394,14 @@ class _LoginScreenState extends State<LoginScreen> {
           TextButton(
             onPressed: _ouvrirPremiereConnexion,
             child: const Text('Première connexion ? Activer mon compte'),
+          ),
+          // Même entrée que « Mot de passe oublié » du web : un lien part à
+          // l'adresse du compte, rien ne change avant son ouverture.
+          TextButton(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const MotDePasseOublieScreen()),
+            ),
+            child: const Text('Mot de passe oublié ?'),
           ),
         ],
       ),

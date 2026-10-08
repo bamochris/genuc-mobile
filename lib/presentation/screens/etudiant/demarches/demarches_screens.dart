@@ -208,6 +208,13 @@ class _NouvelleDemandeScreenState extends State<NouvelleDemandeScreen> {
   Map<String, String> _cibles = const {};
   String? _cibleActuelle;
   String? _cibleSouhaitee;
+  // Promotion d'accueil dans la filière souhaitée. Le serveur l'exige depuis
+  // l'audit du 08/10/2026 : sans elle, la réorientation gardait l'ancienne
+  // promotion (filière B dans une promotion de A) et la demande est refusée
+  // à la validation.
+  Map<String, String> _promotions = const {};
+  String? _promotionSouhaitee;
+  bool _chargementPromotions = false;
   bool _chargement = true;
   bool _envoiEnCours = false;
   String? _erreur;
@@ -334,8 +341,41 @@ class _NouvelleDemandeScreenState extends State<NouvelleDemandeScreen> {
                   }
                   return null;
                 },
-                onChanged: (v) => setState(() => _cibleSouhaitee = v),
+                onChanged: (v) {
+                  setState(() => _cibleSouhaitee = v);
+                  if (_estFiliere) _chargerPromotions(v);
+                },
               ),
+              if (_estFiliere) ...[
+                const SizedBox(height: 14),
+                DropdownButtonFormField<String>(
+                  // La clé change avec la filière : la sélection précédente,
+                  // qui n'appartient plus à la liste, est oubliée.
+                  key: ValueKey('promotion-$_cibleSouhaitee'),
+                  initialValue: _promotionSouhaitee,
+                  isExpanded: true,
+                  decoration: InputDecoration(
+                    labelText: 'Promotion d\'accueil *',
+                    helperText: _cibleSouhaitee == null
+                        ? 'Choisissez d\'abord la filière souhaitée.'
+                        : _chargementPromotions
+                            ? 'Chargement des promotions…'
+                            : (_promotions.isEmpty
+                                ? 'Aucune promotion ouverte dans cette filière.'
+                                : null),
+                  ),
+                  items: _promotions.entries
+                      .map((e) => DropdownMenuItem(
+                            value: e.key,
+                            child: Text(e.value, overflow: TextOverflow.ellipsis),
+                          ))
+                      .toList(),
+                  validator: (v) => (v == null || v.isEmpty)
+                      ? 'La promotion d\'accueil est obligatoire'
+                      : null,
+                  onChanged: (v) => setState(() => _promotionSouhaitee = v),
+                ),
+              ],
               const SizedBox(height: 14),
               TextFormField(
                 controller: _motif,
@@ -372,6 +412,30 @@ class _NouvelleDemandeScreenState extends State<NouvelleDemandeScreen> {
     );
   }
 
+  Future<void> _chargerPromotions(String? filiereId) async {
+    setState(() {
+      _promotions = const {};
+      _promotionSouhaitee = null;
+      _chargementPromotions = filiereId != null;
+    });
+    if (filiereId == null) return;
+    try {
+      final fiches =
+          await context.read<CommunService>().promotionsDeFiliere(filiereId);
+      if (!mounted || _cibleSouhaitee != filiereId) return;
+      setState(() {
+        _promotions = {
+          for (final p in fiches)
+            p.id: p.texte('libelle', alias: const ['nom', 'niveau'], defaut: '—'),
+        };
+        _chargementPromotions = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _chargementPromotions = false);
+    }
+  }
+
   List<DropdownMenuItem<String>> get _optionsMenu => _cibles.entries
       .map((e) => DropdownMenuItem(
             value: e.key,
@@ -398,6 +462,7 @@ class _NouvelleDemandeScreenState extends State<NouvelleDemandeScreen> {
         if (_estFiliere) ...{
           'filiereActuelleId': _cibleActuelle,
           'filiereSouhaiteeId': _cibleSouhaitee,
+          'promotionSouhaiteeId': _promotionSouhaitee,
         } else ...{
           'vacationActuelleId': _cibleActuelle,
           'vacationSouhaiteeId': _cibleSouhaitee,
@@ -418,6 +483,8 @@ class _NouvelleDemandeScreenState extends State<NouvelleDemandeScreen> {
         _motif.clear();
         _cibleActuelle = null;
         _cibleSouhaitee = null;
+        _promotionSouhaitee = null;
+        _promotions = const {};
       });
       _cleFormulaire.currentState?.reset();
     } catch (e) {

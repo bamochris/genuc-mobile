@@ -98,13 +98,17 @@ class ApiService {
     await _post(ApiEndpoints.twoFactorDisable, data: {'code': code});
   }
 
-  Future<Map<String, dynamic>> forgotPassword({
-    required String matricule,
-    required String email,
-  }) {
+  /// Demande de réinitialisation : matricule (étudiant) ou adresse (agent).
+  ///
+  /// Le serveur (audit du 08/10/2026) n'accepte plus d'« adresse de contact » :
+  /// il la rattachait à un compte sans adresse, et quiconque connaissait un
+  /// matricule prenait le compte. Il envoie désormais un LIEN valable 30 min à
+  /// l'adresse du compte ; le mot de passe ne change qu'à l'ouverture du lien.
+  /// La réponse est la même que le compte existe ou non.
+  Future<Map<String, dynamic>> forgotPassword({required String identifiant}) {
     return _post(
       ApiEndpoints.motDePasseOublie,
-      data: {'matricule': matricule, 'email': email},
+      data: {'identifiant': identifiant},
     );
   }
 

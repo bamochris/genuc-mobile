@@ -160,6 +160,15 @@ class SituationFinanciere {
   final List<FraisAcademique> dettes;
   final List<Paiement> paiements;
 
+  /// Totaux par devise : `{ 'USD': {attendu, paye, reste}, 'CDF': {...} }`.
+  ///
+  /// Les totaux globaux additionnent toutes devises confondues — « 500 USD +
+  /// 50 000 CDF » donnait « 50 500 ». Le serveur rend ce détail depuis
+  /// l'audit du 08/10/2026 ; seul lui est juste quand il y a plusieurs devises.
+  final Map<String, TotauxDevise> parDevise;
+
+  bool get devisesMultiples => parDevise.length > 1;
+
   SituationFinanciere({
     required this.inscriptionId,
     required this.matricule,
@@ -171,6 +180,7 @@ class SituationFinanciere {
     required this.estSolde,
     required this.dettes,
     required this.paiements,
+    this.parDevise = const {},
   });
 
   factory SituationFinanciere.fromJson(Map<String, dynamic> json) {
@@ -206,9 +216,31 @@ class SituationFinanciere {
       estSolde: json['estSolde'] ?? reste <= 0,
       dettes: dettes,
       paiements: paiements,
+      parDevise: {
+        if (json['parDevise'] is Map)
+          for (final e in (json['parDevise'] as Map).entries)
+            if (e.value is Map)
+              e.key.toString(): TotauxDevise.fromJson(
+                  Map<String, dynamic>.from(e.value as Map)),
+      },
     );
   }
 
   List<FraisAcademique> get fraisEnRetard =>
       dettes.where((f) => f.estEnRetard).toList();
+}
+
+/// Totaux d'une devise dans la situation financière.
+class TotauxDevise {
+  final double attendu;
+  final double paye;
+  final double reste;
+
+  const TotauxDevise({required this.attendu, required this.paye, required this.reste});
+
+  factory TotauxDevise.fromJson(Map<String, dynamic> json) => TotauxDevise(
+        attendu: _safeDouble(json['attendu']),
+        paye: _safeDouble(json['paye']),
+        reste: _safeDouble(json['reste']),
+      );
 }
