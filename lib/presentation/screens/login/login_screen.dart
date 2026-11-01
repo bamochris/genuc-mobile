@@ -204,7 +204,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: AppTheme.secondary.withValues(alpha: 0.35),
+                          color: AppTheme.bleuCiel.withValues(alpha: 0.35),
                           blurRadius: 34,
                           spreadRadius: 2,
                         ),
@@ -241,7 +241,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     textAlign: TextAlign.center,
                     style: textTheme.labelMedium?.copyWith(
                       fontSize: 11.5,
-                      color: AppTheme.secondaryLight,
+                      color: AppTheme.bleuCiel,
                       letterSpacing: 1.6,
                       fontWeight: FontWeight.w600,
                       shadows: const [
@@ -474,7 +474,7 @@ class _BoutonPrincipal extends StatelessWidget {
         height: 50,
         decoration: BoxDecoration(
           gradient: const LinearGradient(
-            colors: [AppTheme.secondary, AppTheme.secondaryDark],
+            colors: [AppTheme.accentLight, AppTheme.accent],
           ),
           borderRadius: BorderRadius.circular(8),
         ),
@@ -513,16 +513,16 @@ class _Puce extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
       decoration: BoxDecoration(
-        color: AppTheme.secondaryLight.withValues(alpha: 0.16),
+        color: AppTheme.bleuCiel.withValues(alpha: 0.16),
         borderRadius: BorderRadius.circular(30),
         border: Border.all(
-          color: AppTheme.secondaryLight.withValues(alpha: 0.45),
+          color: AppTheme.bleuCiel.withValues(alpha: 0.45),
         ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icone, size: 15, color: AppTheme.secondaryLight),
+          Icon(icone, size: 15, color: AppTheme.bleuCiel),
           const SizedBox(width: 7),
           Text(
             texte,
@@ -576,7 +576,7 @@ class _LigneSecurite extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
             ),
-            child: Icon(icone, size: 18, color: AppTheme.secondaryLight),
+            child: Icon(icone, size: 18, color: AppTheme.bleuCiel),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -619,7 +619,7 @@ class _LigneSecuriteCourte extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(Icons.shield_rounded, size: 14, color: AppTheme.secondaryLight),
+        Icon(Icons.shield_rounded, size: 14, color: AppTheme.bleuCiel),
         const SizedBox(width: 7),
         Flexible(
           child: Text(
@@ -659,7 +659,7 @@ class _IndicateursCarrousel extends StatelessWidget {
             height: 6,
             decoration: BoxDecoration(
               color: i == actif
-                  ? AppTheme.secondaryLight
+                  ? AppTheme.bleuCiel
                   : Colors.white.withValues(alpha: 0.35),
               borderRadius: BorderRadius.circular(3),
             ),

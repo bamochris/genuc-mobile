@@ -812,7 +812,7 @@ class BarreProgression extends StatelessWidget {
     super.key,
     required this.valeur,
     this.libelle,
-    this.couleur = AppTheme.secondary,
+    this.couleur = AppTheme.accentLight,
   });
 
   @override

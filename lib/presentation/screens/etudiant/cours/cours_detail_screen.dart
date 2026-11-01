@@ -87,9 +87,9 @@ class _CoursDetailScreenState extends State<CoursDetailScreen> {
     final inscriptionId = context.read<AuthProvider>().user?.inscriptionId;
     if (inscriptionId == null || inscriptionId.isEmpty) return;
 
-    if (lecon.estComplete) return;
+    if (lecon.estComplete || !lecon.ouverte) return;
 
-    await studentProvider.marquerLeconComplete(
+    final refus = await studentProvider.marquerLeconComplete(
       inscriptionId,
       widget.coursId,
       lecon.id,
@@ -99,9 +99,10 @@ class _CoursDetailScreenState extends State<CoursDetailScreen> {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
-        const SnackBar(
-          content: Text('Leçon marquée comme complétée ✓'),
-          duration: Duration(seconds: 2),
+        SnackBar(
+          content: Text(refus ?? 'Leçon marquée comme terminée'),
+          backgroundColor: refus != null ? AppTheme.error : null,
+          duration: const Duration(seconds: 3),
         ),
       );
   }
@@ -396,7 +397,7 @@ class _LeconTile extends StatelessWidget {
                 children: [
                   Text(
                     '${lecon.ordre}. ${lecon.titre}'
-                    '${lecon.ouverte ? '' : '  🔒'}',
+                    '${lecon.ouverte ? '' : ' (pas encore ouverte)'}',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           fontWeight: FontWeight.w600,
                           decoration: lecon.estComplete
@@ -437,7 +438,8 @@ class _LeconTile extends StatelessWidget {
             const SizedBox(width: 8),
             if (lecon.estComplete)
               const Icon(Icons.check_circle_rounded, color: AppTheme.success, size: 20)
-            else
+            // Une leçon fermée ne se marque pas : le serveur la refuse.
+            else if (lecon.ouverte)
               IconButton(
                 icon: const Icon(Icons.done_rounded, size: 18),
                 tooltip: 'Marquer complétée',

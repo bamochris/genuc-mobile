@@ -652,7 +652,7 @@ class _TachPayEcranPaiementState extends State<TachPayEcranPaiement> {
                     color: estSombre ? Colors.grey.shade400 : Colors.grey.shade600))),
 
           const SizedBox(height: 14),
-          Center(child: Text('Paiement sécurisé TachPay 🔒',
+          Center(child: Text('Paiement sécurisé par TachPay',
               style: TextStyle(fontSize: 11.5,
                   color: estSombre ? Colors.grey.shade400 : Colors.grey))),
         ]),
@@ -950,7 +950,7 @@ class _TachPayEcranConfirmationState extends State<TachPayEcranConfirmation> {
               child: Icon(
                   widget.estBonDeCaisse ? Icons.receipt_long_rounded : Icons.check_rounded,
                   size: 56,
-                  color: widget.estBonDeCaisse ? const Color(0xFF185FA5) : const Color(0xFF2E7D32)),
+                  color: widget.estBonDeCaisse ? const Color(0xFF12396A) : const Color(0xFF2E7D32)),
             ),
             const SizedBox(height: 18),
             Text(widget.estBonDeCaisse ? 'Votre bon de caisse' : 'Paiement initié',

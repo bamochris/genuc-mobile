@@ -136,6 +136,7 @@ class _DelegationsScreenState extends State<DelegationsScreen> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
+            style: AppTheme.styleValidation(ctx, 'Révoquer'),
             child: Text(jeSuisLeDelegue ? 'Renoncer' : 'Révoquer'),
           ),
         ],

@@ -50,7 +50,7 @@ class _RemboursementScreenState extends State<RemboursementScreen> {
 
       if (mounted) {
         setState(() {
-          _message = '✅ Votre demande de remboursement a été soumise avec succès.';
+          _message = 'Votre demande de remboursement a été soumise avec succès.';
           _isError = false;
           _motifController.clear();
           _selectedPaiementId = null;
@@ -59,7 +59,7 @@ class _RemboursementScreenState extends State<RemboursementScreen> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _message = '❌ Erreur: ${e.toString()}';
+          _message = 'Erreur : ${e.toString()}';
           _isError = true;
         });
       }
@@ -113,16 +113,17 @@ class _RemboursementScreenState extends State<RemboursementScreen> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: (_isError ? AppTheme.error : AppTheme.success)
+                  color: (_isError ? AppTheme.error : AppTheme.accentLight)
                       .withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
-                    color: (_isError ? AppTheme.error : AppTheme.success)
+                    color: (_isError ? AppTheme.error : AppTheme.accentLight)
                         .withValues(alpha: 0.3),
                   ),
                 ),
                 child: Text(_message!, style: TextStyle(
-                  color: _isError ? AppTheme.error : AppTheme.success,
+                  color: AppTheme.accentLisible(
+                      context, _isError ? AppTheme.error : AppTheme.accent),
                   fontSize: 13,
                 )),
               ),
@@ -223,7 +224,7 @@ class _RemboursementScreenState extends State<RemboursementScreen> {
                     Text(
                       'Sélectionnez un paiement dans la liste ci-dessus.',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppTheme.warning,
+                        color: AppTheme.ambreTexteOf(context),
                         fontSize: 11,
                       ),
                     ),

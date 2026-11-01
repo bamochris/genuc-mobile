@@ -111,7 +111,7 @@ class _ContenuDashboard extends StatelessWidget {
                     messenger.showSnackBar(
                       const SnackBar(
                         content: Text('Vacation enregistrée avec succès !'),
-                        backgroundColor: AppTheme.success,
+                        backgroundColor: AppTheme.accent, // confirmation : bleu, jamais vert
                       ),
                     );
                   } on ApiException catch (e) {

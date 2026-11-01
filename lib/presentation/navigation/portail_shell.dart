@@ -495,7 +495,7 @@ class _EnTeteTiroir extends StatelessWidget {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               border: Border.all(
-                color: AppTheme.secondaryLight.withValues(alpha: 0.8),
+                color: AppTheme.bleuCiel.withValues(alpha: 0.8),
                 width: 3,
               ),
             ),

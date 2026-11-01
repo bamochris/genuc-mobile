@@ -197,7 +197,7 @@ class SeanceProfesseur {
   String get libelleStatut {
     switch (statut) {
       case 'done':
-        return '✓ Enseigné';
+        return 'Enseigné';
       case 'active':
         return '● En cours';
       default:

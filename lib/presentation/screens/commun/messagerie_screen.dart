@@ -490,7 +490,7 @@ class _CarteMessage extends StatelessWidget {
     return CartePortail(
       onTap: onOuvrir,
       bordure: nonLu
-          ? AppTheme.accentLisible(context, AppTheme.secondary)
+          ? AppTheme.accentLisible(context, AppTheme.accentLight)
               .withValues(alpha: 0.5)
           : null,
       child: Column(
@@ -505,7 +505,7 @@ class _CarteMessage extends StatelessWidget {
                   height: 8,
                   margin: const EdgeInsets.only(top: 5, right: 8),
                   decoration: BoxDecoration(
-                    color: AppTheme.accentLisible(context, AppTheme.secondary),
+                    color: AppTheme.accentLisible(context, AppTheme.accentLight),
                     shape: BoxShape.circle,
                   ),
                 ),

@@ -310,7 +310,7 @@ class _RecuTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final estBon = recu.type == 'bon';
-    final couleurAccent = estBon ? const Color(0xFF185FA5) : const Color(0xFF2E7D32);
+    final couleurAccent = estBon ? const Color(0xFF12396A) : const Color(0xFF2E7D32);
     final fondAccent = estBon ? const Color(0xFFE6F1FB) : const Color(0xFFDFF0D8);
 
     return Container(

@@ -174,7 +174,7 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: AppTheme.success,
+        backgroundColor: AppTheme.accent, // confirmation : bleu, jamais vert
       ),
     );
   }

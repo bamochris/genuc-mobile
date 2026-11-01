@@ -152,21 +152,26 @@ class StudentProvider extends ChangeNotifier {
 
   /// Marque une leçon comme complétée puis recharge le détail pour rafraîchir
   /// la progression.
-  Future<void> marquerLeconComplete(
+  /// Marque une leçon terminée ; rend le refus du serveur, ou `null`.
+  ///
+  /// Le refus ne devient PAS l'erreur de chargement du cours : posé dans
+  /// `_coursDetailError`, il remplaçait tout l'écran par une page d'erreur
+  /// alors que le cours était parfaitement chargé. Depuis le 31/10/2026, le
+  /// serveur refuse une leçon fermée ou étrangère au cours (3bc7730).
+  Future<String?> marquerLeconComplete(
     String inscriptionId,
     String coursId,
     int leconId,
   ) async {
     try {
       await repository.marquerLeconComplete(inscriptionId, coursId, leconId);
-      await loadCoursDetail(inscriptionId, coursId);
     } on ApiException catch (e) {
-      _coursDetailError = e.message;
-      notifyListeners();
+      return e.message;
     } catch (e) {
-      _coursDetailError = 'Erreur de marquage : ${e.runtimeType}';
-      notifyListeners();
+      return 'Erreur de marquage : ${e.runtimeType}';
     }
+    await loadCoursDetail(inscriptionId, coursId);
+    return null;
   }
 
   /// Enregistre le profil et LÈVE le refus du serveur.

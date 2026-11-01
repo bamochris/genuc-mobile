@@ -133,7 +133,7 @@ class ExportListe {
                     fontSize: 8,
                     letterSpacing: 0.6,
                     fontWeight: pw.FontWeight.bold,
-                    color: const PdfColor.fromInt(0xFF185FA5))),
+                    color: const PdfColor.fromInt(0xFF12396A))),
           pw.SizedBox(height: 4),
           pw.Text(titre,
               style: pw.TextStyle(

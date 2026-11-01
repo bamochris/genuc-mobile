@@ -213,7 +213,7 @@ class _CoursCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              '👨‍🏫 ${cours.enseignant ?? 'Professeur non assigné'}'
+              '${cours.enseignant ?? 'Professeur non assigné'}'
               '${cours.credits > 0 ? '  •  ${cours.credits} crédits' : ''}',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: AppTheme.textSecondaryOf(context),

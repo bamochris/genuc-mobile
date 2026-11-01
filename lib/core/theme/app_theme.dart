@@ -8,30 +8,48 @@ class AppTheme {
   static const Color secondary = Color(0xFF1D9E75);
   static const Color secondaryLight = Color(0xFF4bc49a);
   static const Color secondaryDark = Color(0xFF0F6E56);
-  static const Color accent = Color(0xFF185FA5);
-  static const Color accentLight = Color(0xFF4a8fc7);
-  static const Color accentDark = Color(0xFF0f4590);
+  // ─── Charte des couleurs (identique au portail web, charte-couleurs.css) ───
+  // Bleu marine : l'action principale, le lien, l'élément actif.
+  // Rouge       : ce qui retire ou interrompt (rejeter, refuser, supprimer,
+  //               annuler une opération) et les erreurs.
+  // Ambre       : l'avertissement.
+  // Une confirmation se dit en bleu, jamais en vert.
+  static const Color accent = Color(0xFF12396A); // --charte-bleu
+  static const Color accentLight = Color(0xFF2A5A96); // --charte-bleu (sombre)
+  static const Color accentDark = Color(0xFF0C2A50); // --charte-bleu-survol
+
+  /// Bleu clair posé sur le bleu nuit (écran de connexion, en-tête du menu) :
+  /// remplace le vert d'accent, 7,7:1 sur `primary`.
+  static const Color bleuCiel = Color(0xFF8DB8F0);
   static const Color background = Color(0xFFffffff);
   static const Color surface = Color(0xFFffffff);
-  static const Color error = Color(0xFFdc3545);
+  static const Color error = Color(0xFFB42318); // --charte-rouge
   static const Color success = Color(0xFF1D9E75);
   static const Color info = Color(0xFF0d6efd);
-  static const Color warning = Color(0xFFf59e0b);
+  static const Color warning = Color(0xFFE8930C); // --charte-ambre-plein
+
+  /// Texte d'un avertissement, sur le fond ambré (`--charte-ambre-texte`).
+  static const Color ambreTexte = Color(0xFF8A4A00);
+  static const Color ambreTexteDark = Color(0xFFFBC468);
+  static const Color ambreFond = Color(0xFFFFF1D6);
+  static const Color ambreBord = Color(0xFFE8A33D);
   static const Color textPrimary = Color(0xFF0B1F4A);
   static const Color textSecondary = Color(0xFF555555);
   static const Color textLight = Color(0xFF6b7280);
   static const Color textMuted = Color(0xFF9FB8E0);
   static const Color border = Color(0xFFe0e0e0);
   static const Color inputBackground = Color(0xFFfafbfc);
-  static const Color errorBg = Color(0xFFfff0f0);
-  static const Color errorBorder = Color(0xFFffcccc);
-  static const Color errorText = Color(0xFFcc0000);
+  static const Color errorBg = Color(0xFFFEF3F2); // --charte-rouge-fond
+  static const Color errorBorder = Color(0xFFB42318);
+  static const Color errorText = Color(0xFFB42318);
 
   // ─── Surfaces posées sur le fond de marque ───
   // Équivalent des surfaces translucides du portail web : le visuel de fond
   // transparaît sans nuire à la lisibilité du contenu.
-  static const Color glassLight = Color(0xDBFFFFFF); // blanc 86 %
-  static const Color glassDark = Color(0xDB1E293B); // ardoise 86 %
+  // 84 %, comme `--bg-card` du web : la trame du fond se voit, le texte reste
+  // lisible.
+  static const Color glassLight = Color(0xD6FFFFFF); // blanc 84 %
+  static const Color glassDark = Color(0xD61E293B); // ardoise 84 %
   static const Color borderDark = Color(0xFF334155);
 
   // ─── Texte en thème sombre ───
@@ -49,7 +67,31 @@ class AppTheme {
   /// sont précisément les messages qu'on ne peut pas se permettre de rater.
   /// Même teinte, clarté remontée — c'est le `--color-danger-text` du portail
   /// web, à l'identique.
-  static const Color errorDark = Color(0xFFFCA5A5);
+  static const Color errorDark = Color(0xFFF8A39B); // --color-danger-text (sombre)
+
+  /// Texte d'avertissement adapté au thème courant.
+  static Color ambreTexteOf(BuildContext context) =>
+      estSombre(context) ? ambreTexteDark : ambreTexte;
+
+  /// Fond d'un encart d'avertissement adapté au thème courant.
+  static Color ambreFondOf(BuildContext context) =>
+      estSombre(context) ? warning.withValues(alpha: 0.16) : ambreFond;
+
+  /// Bleu marine des liens et des boutons secondaires en thème SOMBRE.
+  ///
+  /// `#2A5A96` remplit bien un bouton sous un libellé blanc (7:1), mais posé
+  /// en texte sur l'ardoise il passe sous le seuil de lecture. Comme sur le
+  /// web, les liens restent clairs : même teinte, clarté calculée jusqu'au
+  /// seuil du texte sur TOUTES les surfaces sombres où il se pose — la carte
+  /// translucide, mais aussi l'ardoise opaque des onglets, fenêtres et barres
+  /// (`#1E293B`, la plus claire : calculé sur la seule carte, il y rendait
+  /// 4,40:1) et les alvéoles en creux.
+  static final Color bleuLienSombre = lisibleSurToutes(accentLight, [
+    composer(glassDark, const Color(0xFF0F172A)),
+    const Color(0xFF1E293B),
+    const Color(0xFF16233A),
+    const Color(0xFF0F172A),
+  ]);
 
   static bool estSombre(BuildContext context) =>
       Theme.of(context).brightness == Brightness.dark;
@@ -68,9 +110,47 @@ class AppTheme {
       estSombre(context) ? borderDark : border;
 
   /// Teinte des icônes de navigation. Le bleu nuit de marque disparaît sur les
-  /// surfaces sombres : on bascule sur le vert secondaire.
+  /// surfaces sombres : on bascule sur le bleu clair des liens (plus de vert,
+  /// comme sur le web).
   static Color iconAccent(BuildContext context) =>
-      estSombre(context) ? secondaryLight : primary;
+      estSombre(context) ? bleuLienSombre : primary;
+
+  /// Couleur d'une action qui retire ou interrompt (Supprimer, Rejeter,
+  /// Refuser, Révoquer, Annuler une opération) : le rouge de la charte.
+  /// Un « Annuler » seul qui ferme une fenêtre reste neutre.
+  static Color destructifOf(BuildContext context) => errorOf(context);
+
+  /// Rouge plein d'un bouton qui confirme une action destructive, sous un
+  /// libellé blanc (`--charte-rouge` : 6,6:1 en clair, 5,2:1 en sombre).
+  static Color rougePlein(BuildContext context) =>
+      estSombre(context) ? const Color(0xFFC8372C) : error;
+
+  /// Mêmes verbes que `utils/actionsDestructives.js` du portail web.
+  static final RegExp _verbesDestructifs = RegExp(
+      r"^(rejeter|refuser|supprimer|annuler|r[ée]voquer|renoncer)(?=$|[\s'’])",
+      caseSensitive: false);
+
+  /// Le libellé désigne-t-il une action qui retire ou interrompt ?
+  ///
+  /// « Annuler » seul, dans une fenêtre, ferme la fenêtre sans rien faire :
+  /// ce n'est pas une opération, il reste neutre — sinon deux boutons rouges
+  /// côte à côte et l'on ne sait plus lequel retire.
+  static bool estDestructif(String libelle, {bool dansUneFenetre = true}) {
+    final texte = libelle.trim();
+    if (!_verbesDestructifs.hasMatch(texte)) return false;
+    if (dansUneFenetre && texte.toLowerCase() == 'annuler') return false;
+    return true;
+  }
+
+  /// Style du bouton principal d'une fenêtre : rouge plein si son libellé
+  /// retire quelque chose, sinon celui du thème (bleu marine).
+  static ButtonStyle? styleValidation(BuildContext context, String libelle) =>
+      estDestructif(libelle)
+          ? ElevatedButton.styleFrom(
+              backgroundColor: rougePlein(context),
+              foregroundColor: Colors.white,
+            )
+          : null;
 
   // ─── Texte : toujours par le contexte ─────────────────────────────
   // `AppTheme.textSecondary` posé en dur rendait gris foncé sur ardoise en
@@ -285,7 +365,7 @@ class AppTheme {
 
   // ─── Palette de statuts, commune aux deux portails ───
   // Reprise des constantes `C` du frontend web (MesCours.jsx et suivants).
-  static const Color statutBleu = Color(0xFF185FA5);
+  static const Color statutBleu = Color(0xFF12396A);
   static const Color statutVert = Color(0xFF1D9E75);
   static const Color statutOrange = Color(0xFFC07A2B);
   static const Color statutRouge = Color(0xFFB91C1C);
@@ -336,8 +416,9 @@ class AppTheme {
       // la page. On déclare donc les deux couleurs, plutôt que de les laisser
       // déduire : c'est le même vert que `ElevatedButton`, l'action première
       // ayant la même identité partout dans l'application.
-      floatingActionButtonTheme: FloatingActionButtonThemeData(
-        backgroundColor: secondaryLisible,
+      floatingActionButtonTheme: const FloatingActionButtonThemeData(
+        // Bleu marine de la charte : 11:1 sous un libellé blanc.
+        backgroundColor: accent,
         foregroundColor: Colors.white,
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
@@ -345,7 +426,7 @@ class AppTheme {
           // `secondaryLisible` et non `secondary` : cf. sa déclaration — le
           // blanc sur `#1D9E75` ne franchit pas 4,5:1, et c'est le libellé du
           // bouton principal de chaque écran.
-          backgroundColor: secondaryLisible,
+          backgroundColor: accent,
           foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
           shape: RoundedRectangleBorder(
@@ -361,8 +442,8 @@ class AppTheme {
         style: OutlinedButton.styleFrom(
           // Ici le vert est du TEXTE posé sur le fond clair : même exigence,
           // même teinte.
-          foregroundColor: secondaryLisible,
-          side: BorderSide(color: secondaryLisible),
+          foregroundColor: accent,
+          side: const BorderSide(color: accent),
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),
@@ -373,7 +454,7 @@ class AppTheme {
         ),
       ),
       textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(foregroundColor: secondaryLisible),
+        style: TextButton.styleFrom(foregroundColor: accent),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
@@ -388,7 +469,7 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: secondary, width: 2),
+          borderSide: const BorderSide(color: accent, width: 2),
         ),
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         labelStyle: textTheme.bodyMedium?.copyWith(
@@ -462,7 +543,7 @@ class AppTheme {
       tabBarTheme: const TabBarThemeData(
         labelColor: primary,
         unselectedLabelColor: textLight,
-        indicatorColor: secondary,
+        indicatorColor: accent,
       ),
       dividerTheme: const DividerThemeData(color: border, space: 1),
       snackBarTheme: const SnackBarThemeData(
@@ -470,7 +551,7 @@ class AppTheme {
         backgroundColor: primary,
         contentTextStyle: TextStyle(color: Colors.white),
       ),
-      progressIndicatorTheme: const ProgressIndicatorThemeData(color: secondary),
+      progressIndicatorTheme: const ProgressIndicatorThemeData(color: accent),
     );
   }
 
@@ -510,13 +591,15 @@ class AppTheme {
       // déduire : c'est le même vert que `ElevatedButton`, l'action première
       // ayant la même identité partout dans l'application.
       floatingActionButtonTheme: const FloatingActionButtonThemeData(
+        // Charte : bleu marine du thème sombre (`#2A5A96`) sous un libellé
+        // blanc, 7:1. Le vert clair d'avant est retiré, comme sur le web.
         // Vert CLAIR et libellé FONCÉ — l'inversion habituelle des thèmes
         // sombres. Reprendre le vert du thème clair (`#1D9E75`) sous un
         // libellé blanc ne donnerait que 3,4:1, et le bouton lui-même se
         // détacherait mal du fond ardoise. Ici : 8,4:1 pour le libellé, et le
         // bouton reste la chose la plus visible de l'écran, ce qu'il doit être.
-        backgroundColor: secondaryLight,
-        foregroundColor: primaryDark,
+        backgroundColor: accentLight,
+        foregroundColor: Colors.white,
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
@@ -524,8 +607,8 @@ class AppTheme {
           // raison : vert CLAIR sous un libellé FONCÉ. Le vert de marque sous
           // du blanc ne rendait que 3,4:1 — le bouton principal de l'écran
           // était le texte le moins lisible de la page. Ici : 8,4:1.
-          backgroundColor: secondaryLight,
-          foregroundColor: primaryDark,
+          backgroundColor: accentLight,
+          foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),
@@ -537,12 +620,12 @@ class AppTheme {
         ),
       ),
       textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(foregroundColor: secondaryLight),
+        style: TextButton.styleFrom(foregroundColor: bleuLienSombre),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: secondaryLight,
-          side: const BorderSide(color: secondaryLight),
+          foregroundColor: bleuLienSombre,
+          side: BorderSide(color: bleuLienSombre),
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),
@@ -565,7 +648,7 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: secondaryLight, width: 2),
+          borderSide: BorderSide(color: bleuLienSombre, width: 2),
         ),
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         labelStyle: textTheme.bodyMedium?.copyWith(
@@ -627,8 +710,8 @@ class AppTheme {
       ),
       drawerTheme: const DrawerThemeData(backgroundColor: glassDark),
       dialogTheme: const DialogThemeData(backgroundColor: Color(0xFF1e293b)),
-      listTileTheme: const ListTileThemeData(
-        iconColor: secondaryLight,
+      listTileTheme: ListTileThemeData(
+        iconColor: bleuLienSombre,
         textColor: textPrimaryDark,
         subtitleTextStyle: TextStyle(color: textSecondaryDark, fontSize: 12),
       ),
@@ -637,10 +720,10 @@ class AppTheme {
         labelStyle: textTheme.labelMedium?.copyWith(color: textPrimaryDark),
         side: const BorderSide(color: borderDark),
       ),
-      tabBarTheme: const TabBarThemeData(
-        labelColor: secondaryLight,
+      tabBarTheme: TabBarThemeData(
+        labelColor: bleuLienSombre,
         unselectedLabelColor: textMutedDark,
-        indicatorColor: secondaryLight,
+        indicatorColor: bleuLienSombre,
       ),
       dividerTheme: const DividerThemeData(color: borderDark, space: 1),
       snackBarTheme: const SnackBarThemeData(
@@ -648,8 +731,8 @@ class AppTheme {
         backgroundColor: Color(0xFF1e293b),
         contentTextStyle: TextStyle(color: textPrimaryDark),
       ),
-      progressIndicatorTheme: const ProgressIndicatorThemeData(
-        color: secondaryLight,
+      progressIndicatorTheme: ProgressIndicatorThemeData(
+        color: bleuLienSombre,
       ),
     );
   }

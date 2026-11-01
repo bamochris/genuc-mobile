@@ -159,7 +159,7 @@ class _CarteBienvenue extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Bonjour, $prenom ! 👋',
+            'Bonjour, $prenom',
             style: const TextStyle(
               color: Colors.white,
               fontSize: 22,

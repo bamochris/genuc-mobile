@@ -170,6 +170,7 @@ class _DialogueFormulaireState extends State<DialogueFormulaire> {
         ),
         ElevatedButton(
           onPressed: _valider,
+          style: AppTheme.styleValidation(context, widget.libelleValidation),
           child: Text(widget.libelleValidation),
         ),
       ],

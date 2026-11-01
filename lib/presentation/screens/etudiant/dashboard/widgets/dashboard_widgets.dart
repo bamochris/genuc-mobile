@@ -125,7 +125,7 @@ class WelcomeCard extends StatelessWidget {
                   const SizedBox(height: 8),
                   _buildInfoRow(
                     dashboardData.typeVacation == 'SOIR' ? Icons.nights_stay_rounded : Icons.wb_sunny_rounded,
-                    dashboardData.typeVacation == 'SOIR' ? '🌙 Vacation Soir' : '☀️ Vacation Jour',
+                    dashboardData.typeVacation == 'SOIR' ? 'Vacation du soir' : 'Vacation du jour',
                   ),
                 ],
               ],
@@ -365,7 +365,7 @@ class SituationFinanciereCard extends StatelessWidget {
                           : Icons.verified_rounded,
                       libelle: situation.totalReste > 0
                           ? 'Reste à payer'
-                          : 'Soldé ✓',
+                          : 'Soldé',
                       valeur: montant(situation.totalReste),
                       couleur: couleurReste,
                     ),
@@ -747,7 +747,7 @@ class EvenementsCard extends StatelessWidget {
                   ? 'Aujourd\'hui'
                   : 'J-${e.nbJoursRestant}',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppTheme.warning,
+                    color: AppTheme.ambreTexteOf(context),
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
                   ),
@@ -1116,9 +1116,11 @@ class _VacationChoiceCardState extends State<VacationChoiceCard> {
                 ),
                 child: Row(
                   children: [
-                    Text(
-                      isSoir ? '🌙' : '☀️',
-                      style: const TextStyle(fontSize: 22),
+                    Icon(
+                      isSoir ? Icons.nights_stay_rounded : Icons.wb_sunny_rounded,
+                      size: 22,
+                      color: AppTheme.accentGraphique(
+                          context, isSoir ? Colors.indigo : AppTheme.warning),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -1126,7 +1128,7 @@ class _VacationChoiceCardState extends State<VacationChoiceCard> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            isSoir ? 'Vacation Soir' : 'Vacation Jour',
+                            isSoir ? 'Vacation du soir' : 'Vacation du jour',
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 14,

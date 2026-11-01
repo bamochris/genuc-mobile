@@ -163,7 +163,7 @@ class _EditProfilScreenState extends State<EditProfilScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: AppTheme.success,
+        backgroundColor: AppTheme.accent, // confirmation : bleu, jamais vert
       ),
     );
   }

@@ -55,7 +55,6 @@ class RecuHistorique {
   String get montantFormate => formatMontant(montant);
   String get dateAjoutFormate => formatDate(dateAjout.toIso8601String());
   String get libelleType => type == 'bon' ? 'Bon de caisse' : 'Reçu de paiement';
-  String get iconeType => type == 'bon' ? '📄' : '✅';
 }
 
 class RecuHistoriqueService {
